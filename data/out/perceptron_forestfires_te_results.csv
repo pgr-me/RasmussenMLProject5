@@ -1,6 +1,0 @@
-problem_class,dataset_name,fold,mse_te,best_eta
-regression,forestfires,1,1.8819738630334517,1e-05
-regression,forestfires,2,3.2222661291364574,1e-05
-regression,forestfires,3,2.161215747999234,1e-05
-regression,forestfires,4,2.0170633890579457,1e-05
-regression,forestfires,5,,1e-05

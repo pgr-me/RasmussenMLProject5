@@ -1,6 +1,0 @@
-problem_class,dataset_name,fold,best_eta,best_eta_iter,ce_te,acc_te
-classification,breast-cancer-wisconsin,1,0.001,58,24.68764369915347,0.9716312056737588
-classification,breast-cancer-wisconsin,2,0.001,58,40.269528630746954,0.935251798561151
-classification,breast-cancer-wisconsin,3,0.001,58,26.10703849210024,0.9640287769784173
-classification,breast-cancer-wisconsin,4,0.001,58,16.03111356156139,0.9856115107913669
-classification,breast-cancer-wisconsin,5,0.001,58,25.886755665050664,0.9716312056737588
