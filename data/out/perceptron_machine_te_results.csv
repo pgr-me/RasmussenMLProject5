@@ -1,0 +1,6 @@
+problem_class,dataset_name,fold,mse_te,best_eta
+regression,machine,1,2734.4547322613116,0.0001
+regression,machine,2,2380.6658862822496,0.0001
+regression,machine,3,3438.213033343069,0.0001
+regression,machine,4,12049.72337737143,0.0001
+regression,machine,5,5267.854905461182,0.0001
