@@ -6,4 +6,4 @@ other scripts when the module is imported."
 """
 
 
-from p4.run import run
+from p5.run import run

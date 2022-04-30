@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Peter Rasmussen, Programming Assignment 3, test_regression_mlp.py
+"""Peter Rasmussen, Programming Assignment 4, test_sarsa.py
 
 """
 # Standard library imports
@@ -16,18 +16,18 @@ from numba import jit, njit
 import numba as nb
 
 # Local imports
-from p4.preprocessing import Preprocessor
-from p4.mlp.mlp import MLP
-from p4.preprocessing.split import make_splits
-from p4.preprocessing.standardization import get_standardization_params, standardize, get_standardization_cols
-from p4.utils import mse, sigmoid, shuffle_indices
+from p5.q_learning import Preprocessor
+from p5.sarsa.regression_perceptron import predict, train_perceptron
+from p5.utils import mse
+from p5.q_learning.split import make_splits
+from p5.q_learning.standardization import get_standardization_params, standardize, get_standardization_cols
 
 warnings.filterwarnings('ignore')
 
 # Define constants
 TEST_DIR = Path(".").absolute()
 REPO_DIR = TEST_DIR.parent
-P4_DIR = REPO_DIR / "p4"
+P4_DIR = REPO_DIR / "p5"
 SRC_DIR = REPO_DIR / "data"
 DST_DIR = REPO_DIR / "data" / "out"
 DST_DIR.mkdir(exist_ok=True, parents=True)
@@ -41,15 +41,15 @@ with open(SRC_DIR / "data_catalog.json", "r") as file:
 data_catalog = {k: v for k, v in data_catalog.items() if k in ["forestfires", "machine", "abalone"]}
 
 
-def test_regression_mlp():
+def test_regression_perceptron():
     # Iterate over each dataset
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    for dataset, dataset_meta in data_catalog.items():
-        print(dataset)
+    for dataset_name, dataset_meta in data_catalog.items():
+        print(dataset_name)
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Preprocess dataset
-        preprocessor = Preprocessor(dataset, dataset_meta, SRC_DIR)
+        preprocessor = Preprocessor(dataset_name, dataset_meta, SRC_DIR)
         preprocessor.load()
         preprocessor.drop()
         preprocessor.identify_features_label_id()
@@ -82,7 +82,6 @@ def test_regression_mlp():
         test_sets = {}
         etas = {}
         te_results_li = []
-        from p4.mlp.layer import Layer
         for fold in range(1, K_FOLDS + 1):
             print(f"\t\t{fold}")
             test_mask = data["fold"] == fold
@@ -102,88 +101,46 @@ def test_regression_mlp():
             val = val.drop(axis=1, labels=cols).join(standardize(val[cols], means, std_devs))
             test = test.drop(axis=1, labels=cols).join(standardize(test[cols], means, std_devs))  # Save test for later
 
+            # Add bias terms
+            train["intercept"] = 1
+            val["intercept"] = 1
+            test["intercept"] = 1  # Save test for later
+
             YX_tr = train.copy().astype(np.float64).values
             YX_te = test.copy().astype(np.float64).values  # Save test for later
             YX_val = val.copy().astype(np.float64).values
             Y_tr, X_tr = YX_tr[:, 0].reshape(len(YX_tr), 1), YX_tr[:, 1:]
-            test_sets[fold] = dict(Y_te=YX_te[:, 0].reshape(len(YX_te), 1), X_te=YX_te[:, 1:],
-                                   Y_tr=Y_tr, X_tr=X_tr)  # Save test for later
+            test_sets[fold] = dict(Y_te=YX_te[:, 0].reshape(len(YX_te), 1), X_te=YX_te[:, 1:])  # Save test for later
             Y_val, X_val = YX_val[:, 0].reshape(len(YX_val), 1), YX_val[:, 1:]
-
-            D = X_val.shape[1]
-            H = 4
-            K = 4
-
-            n_runs = 50
-            hidden_units_li = [[10, 10], [10, 8], [8, 6], [6, 6], [10, 6], [6, 4], [4, 2]]
-            #hidden_units_li = [[10, 10], [10, 8]]
-            val_results = []
             for eta in [0.00001, 0.0001, 0.001, 0.01, 0.1, 0.2, 0.4, 1]:
-            #for eta in [0.00001, 0.0001]:
-                for hidden_units in hidden_units_li:
-                    h1, h2 = hidden_units
-                    layers = [Layer("input", D, n_input_units=D, apply_sigmoid=True),
-                              Layer("hidden_1", h1, n_input_units=None, apply_sigmoid=True),
-                              Layer("hidden_2", h2, n_input_units=None, apply_sigmoid=True),
-                              Layer("output", 1, n_input_units=None, apply_sigmoid=False)
-                              ]
-                    mlp = MLP(layers, D, eta, problem_class, n_runs=n_runs)
-                    mlp.initialize_weights()
-                    mlp.train(Y_tr, X_tr, Y_val, X_val)
-                    index = ["eta", "h1", "h2"]
-                    outputs = pd.DataFrame([[x] * n_runs for x in [eta, h1, h2]], index=index).transpose()
-                    outputs["mse_val"] = mlp.val_scores
-                    outputs["run"] = range(n_runs)
-                    val_results.append(outputs)
-            val_results = pd.concat(val_results)
-            val_results["fold"] = fold
-            val_results = val_results.set_index(["fold", "run"]).reset_index()
-            val_results_li.append(val_results)
-
-        val_results = pd.concat(val_results_li)
-        group = ["eta", "h1", "h2"]
-        subset = ["fold", "eta", "h1", "h2"]
-        val_summary = val_results.copy().sort_values(by="mse_val").drop_duplicates(subset=subset)
-        val_summary = val_summary.groupby(group).mean().sort_values(by="mse_val")
-        best_val_params = val_summary.reset_index().iloc[0].to_dict()
+                w_tr = train_perceptron(Y_tr, X_tr, eta, thresh=THRESH)
+                Yhat_val = predict(X_val, w_tr)
+                mse_val = mse(Y_val, Yhat_val)
+                val_results_li.append(dict(dataset_name=dataset_name, fold=fold, eta=eta, mse_val=mse_val))
+                etas[(fold, eta)] = w_tr  # Save etas for later
+        val_results = pd.DataFrame(val_results_li)
+        val_summary = val_results.groupby("eta")["mse_val"].mean().sort_values().to_frame()
+        best_eta = val_summary.index.values[0]
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Test
         print(f"\tTest")
-        eta = best_val_params["eta"]
-        h1 = int(best_val_params["h1"])
-        h2 = int(best_val_params["h2"])
-        n_runs = int(best_val_params["run"])
         for fold in range(1, K_FOLDS + 1):
             print(f"\t\t{fold}")
-            test_set = test_sets[fold]
-            Y_tr, X_tr = test_set["Y_tr"], test_set["X_tr"]
-            Y_te, X_te = test_set["Y_te"], test_set["X_te"]
-            layers = [Layer("input", D, n_input_units=D, apply_sigmoid=True),
-                      Layer("hidden_1", h1, n_input_units=None, apply_sigmoid=True),
-                      Layer("hidden_2", h2, n_input_units=None, apply_sigmoid=True),
-                      Layer("output", 1, n_input_units=None, apply_sigmoid=False)
-                      ]
-
-            mlp = MLP(layers, D, eta, problem_class, n_runs=n_runs)
-            mlp.initialize_weights()
-            mlp.train(Y_tr, X_tr, Y_te, X_te)
-
-            index = ["eta", "h1", "h2"]
-            outputs = pd.DataFrame([[x] * n_runs for x in [eta, h1, h2]], index=index).transpose()
-            outputs["mse_te"] = mlp.val_scores
-            outputs["run"] = range(n_runs)
-            outputs["fold"] = fold
-            te_results_li.append(outputs)
-
-        te_results = pd.concat(te_results_li).set_index(["fold", "run"]).reset_index()
+            w_tr = etas[(fold, best_eta)]
+            Y_te, X_te = test_sets[fold]["Y_te"], test_sets[fold]["X_te"]
+            Yhat_te = predict(X_te, w_tr)
+            mse_te = mse(Y_te, Yhat_te)
+            te_results_li.append(dict(problem_class=problem_class, dataset_name=dataset_name, fold=fold, mse_te=mse_te,
+                                      best_eta=best_eta))
+        te_results = pd.DataFrame(te_results_li)
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Save outputs
         print("\tSave")
-        te_results_dst = DST_DIR / f"mlp_{dataset}_te_results.csv"
-        val_results_dst = DST_DIR / f"mlp_{dataset}_val_results.csv"
-        val_summary_dst = DST_DIR / f"mlp_{dataset}_val_summary.csv"
+        te_results_dst = DST_DIR / f"perceptron_{dataset_name}_te_results.csv"
+        val_results_dst = DST_DIR / f"perceptron_{dataset_name}_val_results.csv"
+        val_summary_dst = DST_DIR / f"perceptron_{dataset_name}_val_summary.csv"
 
         te_results.to_csv(te_results_dst, index=False)
         val_results.to_csv(val_results_dst, index=False)
@@ -191,4 +148,4 @@ def test_regression_mlp():
 
 
 if __name__ == "__main__":
-    test_regression_mlp()
+    test_regression_perceptron()

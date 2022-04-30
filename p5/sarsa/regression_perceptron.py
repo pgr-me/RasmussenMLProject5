@@ -9,7 +9,7 @@ import numpy as np
 from numba import njit
 import numba as nb
 
-from p4.utils import mse
+from p5.utils import mse
 
 
 @njit

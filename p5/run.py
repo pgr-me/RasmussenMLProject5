@@ -18,8 +18,8 @@ import numpy as np
 import pandas as pd
 
 # Local imports
-from p4.preprocessing import Preprocessor, get_standardization_cols, get_standardization_params, standardize
-from p4.preprocessing.split import make_splits
+from p5.q_learning import Preprocessor, get_standardization_cols, get_standardization_params, standardize
+from p5.q_learning.split import make_splits
 
 
 def run(
@@ -39,7 +39,7 @@ def run(
 
     """
     dir_path = Path(os.path.dirname(os.path.realpath(__file__)))
-    log_path = dir_path / "p4.log"
+    log_path = dir_path / "p5.log"
     with open(src_dir / "discretize.json") as file:
         discretize_dicts = json.load(file)
     discretize_dicts = defaultdict(lambda: {}, discretize_dicts)

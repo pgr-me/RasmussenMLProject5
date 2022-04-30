@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Peter Rasmussen, Programming Assignment 4, test_classification_autoencoder.py
+"""Peter Rasmussen, Programming Assignment 4, test_value_iteration.py
 
 """
 # Standard library imports
@@ -12,19 +12,19 @@ import numpy as np
 import pandas as pd
 
 # Local imports
-from p4.preprocessing import Preprocessor
-from p4.mlp.mlp import MLP
-from p4.preprocessing.split import make_splits
-from p4.preprocessing.standardization import get_standardization_params, standardize, get_standardization_cols
-from p4.utils import accuracy, dummy_categorical_label
-from p4.mlp.layer import Layer
+from p5.q_learning import Preprocessor
+from p5.value_iteration.mlp import MLP
+from p5.q_learning.split import make_splits
+from p5.q_learning.standardization import get_standardization_params, standardize, get_standardization_cols
+from p5.utils import accuracy, dummy_categorical_label
+from p5.value_iteration.layer import Layer
 
 warnings.filterwarnings('ignore')
 
 # Define constants
 TEST_DIR = Path(".").absolute()
 REPO_DIR = TEST_DIR.parent
-P4_DIR = REPO_DIR / "p4"
+P4_DIR = REPO_DIR / "p5"
 SRC_DIR = REPO_DIR / "data"
 DST_DIR = REPO_DIR / "data" / "out"
 DST_DIR.mkdir(exist_ok=True, parents=True)
@@ -150,7 +150,7 @@ def test_classification_autoencoder():
                                   Layer("hidden_2", h2, n_input_units=None, apply_sigmoid=True),
                                   Layer("output", K, n_input_units=None, apply_sigmoid=False)
                                   ]
-                    mlp = MLP(mlp_layers, D, eta, problem_class, n_runs=n_runs, name="mlp")
+                    mlp = MLP(mlp_layers, D, eta, problem_class, n_runs=n_runs, name="value_iteration")
                     mlp.initialize_weights()
 
                     # Hook up autoencoder layers
@@ -209,7 +209,7 @@ def test_classification_autoencoder():
                           Layer("hidden_2", h2, n_input_units=None, apply_sigmoid=True),
                           Layer("output", K, n_input_units=None, apply_sigmoid=False)
                           ]
-            mlp = MLP(mlp_layers, D, eta, problem_class, n_runs=n_runs, name="mlp")
+            mlp = MLP(mlp_layers, D, eta, problem_class, n_runs=n_runs, name="value_iteration")
             mlp.initialize_weights()
 
             # Hook up autoencoder layers

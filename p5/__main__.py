@@ -23,7 +23,7 @@ import argparse
 from pathlib import Path
 
 # local imports
-from p4.run import run
+from p5.run import run
 
 
 # Parse arguments

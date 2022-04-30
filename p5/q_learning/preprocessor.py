@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Peter Rasmussen, Programming Assignment 3, preprocessing.py
+"""Peter Rasmussen, Programming Assignment 3, q_learning.py
 
 This module provides the Preprocessor class.
 
@@ -15,8 +15,8 @@ import numpy as np
 import pandas as pd
 
 # Local imports
-from p4.preprocessing.jenks import compute_two_break_jenks
-from p4.preprocessing.split import make_splits
+from p5.q_learning.jenks import compute_two_break_jenks
+from p5.q_learning.split import make_splits
 
 
 class Preprocessor:

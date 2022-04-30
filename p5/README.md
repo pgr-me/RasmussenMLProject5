@@ -9,12 +9,12 @@ The package is designed to be executed as a module from the command line. The us
 directory provides example output files - which echo the dynamically-generated input - for the user.
 
 ```shell
-python -m path/to/p4  -i path/to/in_dir -o path/to/out_dir/ -k <folds> -v <val frac> -r <random state>
+python -m path/to/p5  -i path/to/in_dir -o path/to/out_dir/ -k <folds> -v <val frac> -r <random state>
 ```
 
 As an example:
 ```shell
-python -m path/to/p4  -i path/to/in_dir -o path/to/out_dir/ -k 5 -v 0.1 -r 777
+python -m path/to/p5  -i path/to/in_dir -o path/to/out_dir/ -k 5 -v 0.1 -r 777
 ```
 
 A summary of the command line arguments is below.
