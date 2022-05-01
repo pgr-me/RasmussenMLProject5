@@ -11,7 +11,51 @@ import pandas as pd
 # Local imports
 from p5.environment.track import Track
 from p5.utils import bresenham
-from p5.settings import VEL_MAX, VEL_MIN, P_ACC_SUCCEED, P_ACC_FAIL
+from p5.settings import ACTIONS, GAMMA, VEL_MAX, VEL_MIN, P_ACC_SUCCEED, P_ACC_FAIL
+
+
+def learn_state(track: Track, states, ix, oob_penalty) -> dict:
+    """
+    Learn one state.
+    :param track: Track object
+    :param states: Dataframe of states
+    :param ix: States dataframe index
+    :param oob_penalty: Out-of-bounds penalty
+    :return: Best value and action
+    """
+    # Extract a dictionary of state attributes: space, position, velocity, reward, time, etc.
+    state_di = states.loc[ix].to_dict()
+
+    best_action, best_Q_sa = None, -float("inf")
+    for action in ACTIONS:
+        # Case when action succeeds
+        x_col_acc, y_row_acc = action
+        succeed_vel = update_velocity(state_di, x_col_acc, y_row_acc)
+        succeed_pos_li: list = update_position(state_di, track, succeed_vel[0], succeed_vel[1], oob_penalty=oob_penalty,
+                                               succeed=True)
+
+        # Case when action fails
+        fail_vel = update_velocity(state_di, 0, 0)
+        fail_pos_li: list = update_position(state_di, track, fail_vel[0], fail_vel[1], oob_penalty=oob_penalty,
+                                            succeed=False)
+
+        # Combine success and failure cases
+        actions = pd.concat([pd.DataFrame(succeed_pos_li), pd.DataFrame(fail_pos_li)])
+        actions = compute_state_weights(actions)
+        di = {"x_col_vel_1": "x_col_vel", "y_row_vel_1": "y_row_vel", "x_col_pos_1": "x_col_pos",
+              "y_row_pos_1": "y_row_pos"}
+        labels = ["x_col_vel", "y_row_vel", "x_col_pos", "y_row_pos", "val"]
+        on = [x for x in labels if x != "val"]
+        actions = actions.rename(columns=di).merge(states[labels], on=on, how="left")
+
+        # Compute the expected value
+
+        Q_sa: float = state_di["r"] + GAMMA * (actions.wt * actions.val).sum()  # * state_di["prev_val"]
+        if Q_sa > best_Q_sa:
+            best_Q_sa = Q_sa
+            best_action = action
+    best_dict = dict(val=best_Q_sa, best_x_col_a=best_action[0], best_y_row_a=best_action[1])
+    return best_dict
 
 
 def update_position(state_di: dict, track: Track, x_col_vel_1, y_row_vel_1, oob_penalty="stay-in-place",
