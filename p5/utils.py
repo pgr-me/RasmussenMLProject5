@@ -7,6 +7,8 @@ This module provides miscellaneous utility functions.
 # Third party libraries
 import pandas as pd
 
+from p5.settings import VEL_MAX, VEL_MIN
+
 
 def bresenham(x_col_0: int, y_row_0: int, x_col_1: int, y_row_1: int):
     """
@@ -55,3 +57,23 @@ def is_finished(pos, track: pd.DataFrame):
     if track.iloc[pos[0], pos[1]] == "F":
         return True
     return False
+
+
+def update_velocity(state_di: dict, x_col_acc, y_row_acc) -> tuple:
+    """
+    Update car speed based on acceleration.
+    :param state_di: Dictionary of state attributes that includes cell type, location, velocity, value, etc.
+    :param x_col_acc: Acceleration in x-direction
+    :param y_row_acc: Acceleration in y-direction
+    :return: x-y pair of velocities
+    """
+    x_col_vel_1 = state_di["x_col_vel"] + x_col_acc
+    y_row_vel_1 = state_di["y_row_vel"] + y_row_acc
+
+    # Update velocities subject to max and min velocity limits
+    x_col_vel_1 = VEL_MAX if x_col_vel_1 > VEL_MAX else x_col_vel_1
+    x_col_vel_1 = VEL_MIN if x_col_vel_1 < VEL_MIN else x_col_vel_1
+    y_row_vel_1 = VEL_MAX if y_row_vel_1 > VEL_MAX else y_row_vel_1
+    y_row_vel_1 = VEL_MIN if y_row_vel_1 < VEL_MIN else y_row_vel_1
+
+    return x_col_vel_1, y_row_vel_1

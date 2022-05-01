@@ -8,12 +8,11 @@ import multiprocessing as mp
 import warnings
 
 # Third party imports
-import numpy as np
 import pandas as pd
 
 # Local imports
 from p5.settings import *
-from p5.environment.learn_state import learn_state
+from p5.value_iteration import learn_state
 from p5.environment.track import Track
 
 warnings.filterwarnings('ignore')
@@ -34,12 +33,16 @@ OOB_PENALTIES = ["stay-in-place", "back-to-beginning"]
 
 
 def test_value_iteration():
+    """
+    Test value iteration algorithm.
+    """
     # Iterate over each dataset
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     for track_src in track_srcs:
         for oob_penalty in OOB_PENALTIES:
             print(track_src.stem)
 
+            # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             # Make the track and possible states
             track = Track(track_src)
             track.prep_track()
@@ -47,8 +50,9 @@ def test_value_iteration():
             states = track.states.copy()
             indices = track.states.index.values
 
+            # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             # Train over epochs
-            for i in range(10):
+            for i in range(15):
                 states["t"] = states["t"] + 1
 
                 # Learn the states
@@ -63,8 +67,12 @@ def test_value_iteration():
 
                 # Exit loop if greatest improvement less than threshold
                 max_diff = (states["val"] - states["prev_val"]).abs().max()
-
                 print(f'Iteration {i}: max diff={max_diff:.2f}')
+                if max_diff <= VALUE_ITERATION_TERMINATION_THRESHOLD:
+                    break
+
+            # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+            # Save output
             dst = OUT_DIR / f"{track_src.stem}_{oob_penalty}.csv"
             states.to_csv(dst, index=False)
             print("stop")
