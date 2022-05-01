@@ -26,11 +26,12 @@ class BaseState:
         self.y_row_pos_0 = y_row_pos
         self.x_col_vel_0 = x_col_vel
         self.y_row_vel_0 = y_row_vel
-        self.x_col_init_acc = x_col_init_acc
-        self.y_row_init_acc = y_row_init_acc
+        self.x_col_succeed_acc = x_col_init_acc
+        self.y_row_succeed_acc = y_row_init_acc
         self.t_0 = t
 
         self.track = track
+        self.n_start_cells = len(self.track.start_cells)
         self.oob_penalty = oob_penalty
         self.success_rate = success_rate
 
@@ -48,7 +49,7 @@ class BaseState:
     def __repr__(self):
         xpos0, ypos0 = self.x_col_pos_0, self.y_row_pos_0
         xvel0, yvel0 = self.x_col_vel_0, self.y_row_vel_0
-        xacc0, yacc0 = self.x_col_init_acc, self.y_row_init_acc
+        xacc0, yacc0 = self.x_col_succeed_acc, self.y_row_succeed_acc
 
         xpos1, ypos1 = self.x_col_pos_1, self.y_row_pos_1
         xvel1, yvel1 = self.x_col_vel_1, self.y_row_vel_1
@@ -57,26 +58,6 @@ class BaseState:
         str_ = f"Pos={xpos0, ypos0}, Vel={xvel0, yvel0}, Acc={xacc0, yacc0} @ t={self.t_0}; "
         str_ += f"Pos={xpos1, ypos1}, Vel={xvel1, yvel1}, Acc={xacc1, yacc1} @ t={self.t_1}"
         return str_
-
-    def make_states(self) -> pd.DataFrame:
-        """
-        Make states.
-        :return: States table
-        """
-
-        states = []
-        for y_row_pos, row in self.track.track.iterrows():
-            for x_col_pos, space in row.to_dict().items():
-                if space != "#":
-                    for y_row_vel in VELOCITIES:
-                        for x_col_vel in VELOCITIES:
-                            r = 0 if space == "F" else -1
-                            state = dict(space=space, y_row_pos=y_row_pos, x_col_pos=x_col_pos, y_row_vel=y_row_vel,
-                                         x_col_vel=x_col_vel, r=r, val=0, t=0, best_a=np.nan)
-                            states.append(state)
-        states = pd.DataFrame(states)
-        self.states = states
-        return self.states
 
     def reset(self):
         self.x_col_pos_1 = None

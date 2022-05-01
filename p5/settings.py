@@ -1,5 +1,5 @@
+from pathlib import Path
 import numpy as np
-
 
 ACCELERATION = [-1, 0, 1]
 ACTIONS = [[x_col_acc, y_row_acc] for x_col_acc in [-1, 0, 1] for y_row_acc in [-1, 0, 1]]
@@ -13,3 +13,7 @@ VEL_MIN = -5
 VEL_MAX = 5
 VELOCITIES = np.arange(VEL_MIN, VEL_MAX + 1)
 GAMMA = 0.9
+P_ACC_SUCCEED = 0.8
+P_ACC_FAIL = 1 - P_ACC_SUCCEED
+VALUE_ITERATION_TERMINATION_THRESHOLD = 0
+N_CORES = 6

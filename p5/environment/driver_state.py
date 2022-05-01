@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Peter Rasmussen, Programming Assignment 5, utils.py
 
-This module provides the DriverState class, a state-level component of the simulation.
+This module provides the DriverState class, a state-level component of the simulation. The agent does not learn in this
+module; it acts given the policy.
+
 
 """
 # Third party imports
@@ -25,13 +27,13 @@ class DriverState(BaseState):
         """
         For use after model is trained.
         """
-        if self.x_col_init_acc not in ACCELERATION:
-            raise ValueError(f"x_col_init_acc is {self.x_col_init_acc} but must be one of {ACCELERATION}.")
-        if self.y_row_init_acc not in ACCELERATION:
-            raise ValueError(f"y_col_init_acc is {self.y_row_init_acc} but must be one of {ACCELERATION}.")
+        if self.x_col_succeed_acc not in ACCELERATION:
+            raise ValueError(f"x_col_init_acc is {self.x_col_succeed_acc} but must be one of {ACCELERATION}.")
+        if self.y_row_succeed_acc not in ACCELERATION:
+            raise ValueError(f"y_col_init_acc is {self.y_row_succeed_acc} but must be one of {ACCELERATION}.")
 
         if np.random.random() >= self.success_rate:
-            self.x_col_acc, self.y_row_acc = self.x_col_init_acc, self.y_row_init_acc
+            self.x_col_acc, self.y_row_acc = self.x_col_succeed_acc, self.y_row_succeed_acc
         else:
             self.x_col_acc, self.y_row_acc = 0, 0
 

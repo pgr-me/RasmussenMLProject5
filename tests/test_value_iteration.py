@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Peter Rasmussen, Programming Assignment 4, test_value_iteration.py
+"""Peter Rasmussen, Programming Assignment 5, test_value_iteration.py
 
 """
 # Standard library imports
-import json
 from pathlib import Path
+import multiprocessing as mp
 import warnings
 
 # Third party imports
@@ -12,12 +12,9 @@ import numpy as np
 import pandas as pd
 
 # Local imports
-from p5.q_learning import Preprocessor
-from p5.value_iteration.mlp import MLP
-from p5.q_learning.split import make_splits
-from p5.q_learning.standardization import get_standardization_params, standardize, get_standardization_cols
-from p5.utils import accuracy, dummy_categorical_label
-from p5.value_iteration.layer import Layer
+from p5.settings import *
+from p5.environment.learn_state import compute_state_weights, update_position, update_velocity
+from p5.environment.track import Track
 
 warnings.filterwarnings('ignore')
 
@@ -25,222 +22,92 @@ warnings.filterwarnings('ignore')
 TEST_DIR = Path(".").absolute()
 REPO_DIR = TEST_DIR.parent
 P4_DIR = REPO_DIR / "p5"
-SRC_DIR = REPO_DIR / "data"
-DST_DIR = REPO_DIR / "data" / "out"
-DST_DIR.mkdir(exist_ok=True, parents=True)
+DATA_DIR = REPO_DIR / "data"
+IN_DIR = DATA_DIR / "in"
+OUT_DIR = DATA_DIR / "out"
 THRESH = 0.01
 K_FOLDS = 5
 VAL_FRAC = 0.2
 
-# Load data catalog and tuning params
-with open(SRC_DIR / "data_catalog.json", "r") as file:
-    data_catalog = json.load(file)
-data_catalog = {k: v for k, v in data_catalog.items() if k in ["breast-cancer-wisconsin", "car", "house-votes-84"]}
+track_srcs = [x for x in IN_DIR.iterdir() if x.stem == "toy-track"]
+OOB_PENALTIES = ["stay-in-place", "back-to-beginning"]
 
 
-def test_classification_autoencoder():
+def learn_state(track, states, ix, oob_penalty):
+    # series = states.loc[ix]
+    # Extract a dictionary of state attributes: space, position, velocity, reward, time, etc.
+    state_di = states.loc[ix].to_dict()
+
+    best_action, best_Q_sa = None, -float("inf")
+    for action in ACTIONS:
+        # Case when action succeeds
+        x_col_acc, y_row_acc = action
+        succeed_vel = update_velocity(state_di, x_col_acc, y_row_acc)
+        succeed_pos_li: list = update_position(state_di, track, succeed_vel[0], succeed_vel[1], oob_penalty=oob_penalty,
+                                               succeed=True)
+
+        # Case when action fails
+        fail_vel = update_velocity(state_di, 0, 0)
+        fail_pos_li: list = update_position(state_di, track, fail_vel[0], fail_vel[1], oob_penalty=oob_penalty,
+                                            succeed=False)
+
+        # Combine success and failure cases
+        actions = pd.concat([pd.DataFrame(succeed_pos_li), pd.DataFrame(fail_pos_li)])
+        actions = compute_state_weights(actions)
+        di = {"x_col_vel_1": "x_col_vel", "y_row_vel_1": "y_row_vel", "x_col_pos_1": "x_col_pos",
+              "y_row_pos_1": "y_row_pos"}
+        labels = ["x_col_vel", "y_row_vel", "x_col_pos", "y_row_pos", "prev_val"]
+        on = [x for x in labels if x != "prev_val"]
+        actions = actions.rename(columns=di).merge(states[labels], on=on, how="left")
+
+        # Compute the expected value
+
+        Q_sa: float = state_di["r"] + GAMMA * (actions.wt * actions.prev_val).sum()  # * state_di["prev_val"]
+        if Q_sa > best_Q_sa:
+            best_Q_sa = Q_sa
+            best_action = action
+    best_dict = dict(val=best_Q_sa, best_x_col_a=best_action[0], best_y_row_a=best_action[1])
+    return best_dict
+
+
+def test_value_iteration():
     # Iterate over each dataset
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    for dataset, dataset_meta in data_catalog.items():
-        print(dataset)
+    for oob_penalty in OOB_PENALTIES:
+        for track_src in track_srcs:
+            print(track_src.stem)
 
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Preprocess dataset
-        preprocessor = Preprocessor(dataset, dataset_meta, SRC_DIR)
-        preprocessor.load()
-        preprocessor.drop()
-        preprocessor.identify_features_label_id()
-        preprocessor.replace()
-        preprocessor.log_transform()
-        preprocessor.set_data_classes()
-        preprocessor.impute()
-        preprocessor.dummy()
-        preprocessor.set_data_classes()
-        preprocessor.shuffle()
+            # Make the track and possible states
+            track = Track(track_src)
+            track.prep_track()
+            track.make_states()
+            states = track.states.copy()
+            indices = track.states.index.values
+            for i in range(10):
+                print(i)
+                states["t"] = states["t"] + 1
+                with mp.Pool(processes=N_CORES) as pool:
+                    best_li: list = pool.starmap(learn_state, [(track, states, ix, oob_penalty) for ix in indices])
+                best_df = pd.DataFrame(best_li)
+                states["prev_val"] = states["val"]
+                labels = ["val", "best_x_col_a", "best_y_row_a"]
 
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Extract feature and label columns
-        label = preprocessor.label
-        features = [x for x in preprocessor.features if x != label]
-        problem_class = dataset_meta["problem_class"]
-        data = preprocessor.data.copy()
-        data = data[[label] + features]
+                states = states.drop(axis=1, labels=labels).join(best_df)
 
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Assign folds
-        data["fold"] = make_splits(data, problem_class, label, k_folds=K_FOLDS, val_frac=None)
+                ## Update track values and best action
+                # states.loc[ix, "prev_val"] = states.loc[ix].loc["val"]
+                # states.loc[ix, "val"] = best_Q_sa
+                # states.loc[ix, "best_x_col_a"] = best_action[0]
+                # states.loc[ix, "best_y_row_a"] = best_action[1]
+                # pass
 
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Prep labels
-        if problem_class == "classification":
-            data[label] = data[label].astype(int)
-            classes = sorted(data[label].unique())
-            K = len(classes)
-            # Dummy labels and save for later
-            dummied_label_df, dummied_label_cols = dummy_categorical_label(data, label)
+                # Exit loop if greatest improvement less than threshold
+                max_diff = (states["val"] - states["prev_val"]).abs().max()
+                # if max_diff <= VALUE_ITERATION_TERMINATION_THRESHOLD:
+                #    break
 
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Validate: Iterate over each fold-run
-        print(f"\tValidate")
-        val_results_li = []
-        test_sets = {}
-        te_results_li = []
-
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Validation: Iterate over each fold
-        for fold in range(1, K_FOLDS + 1):
-            print(f"\t\t{fold}")
-
-            # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-            # Split test, train, and validation
-            test_mask = data["fold"] == fold
-            test = data.copy()[test_mask].drop(axis=1, labels="fold")  # We'll save the test for use later
-            train_val = data.copy()[~test_mask].drop(axis=1, labels="fold")
-            train_val["train"] = make_splits(train_val, problem_class, label, k_folds=None, val_frac=VAL_FRAC)
-            train_mask = train_val["train"] == 1
-            train = train_val.copy()[train_mask].drop(axis=1, labels="train")
-            val = train_val.copy()[~train_mask].drop(axis=1, labels="train")
-
-            # Get standardization parameters from training-validation set
-            cols = get_standardization_cols(train, features)
-            means, std_devs = get_standardization_params(train.copy()[cols])
-
-            # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-            # Standardize data
-            X_tr_df = train.drop(axis=1, labels=[label] + cols).join(standardize(train[cols], means, std_devs))
-            X_val_df = val.drop(axis=1, labels=[label] + cols).join(standardize(val[cols], means, std_devs))
-            X_te_df = test.drop(axis=1, labels=[label] + cols).join(standardize(test[cols], means, std_devs))
-
-            # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-            # Convert train, test, and validation dataframes into arrays
-            X_tr = X_tr_df.copy().astype(np.float64).values
-            X_val = X_val_df.copy().astype(np.float64).values
-            X_te = X_te_df.copy().astype(np.float64).values
-
-            Y_tr = dummied_label_df.loc[train.index].astype(np.float64).values
-            Y_val = dummied_label_df.loc[val.index].astype(np.float64).values
-            Y_te = dummied_label_df.loc[test.index].astype(np.float64).values
-
-            # Save test data for later
-            test_sets[fold] = dict(Y_te=Y_te, X_te=X_te, Y_tr=Y_tr, X_tr=X_tr)  # Save test for later
-
-            D = X_val.shape[1]
-
-            n_runs = 150
-            hidden_units_li = [[8, 6], [8, 4], [6, 6], [6, 4], [4, 4], [4, 2]]
-            val_results = []
-            #for eta in [0.1, 0.2, 0.4, 1]:
-            for eta in [0.00001, 0.0001, 0.001, 0.01, 0.1, 0.2]:
-                for hidden_units in hidden_units_li:
-                    h1, h2 = hidden_units
-
-                    # Train autoencoder
-                    layers = [Layer("input", D, n_input_units=D, apply_sigmoid=True),
-                              Layer("hidden_1", h1, n_input_units=None, apply_sigmoid=True),
-                              Layer("output", D, n_input_units=None, apply_sigmoid=False)
-                              ]
-                    autoencoder = MLP(layers, D, eta, "regression", n_runs=n_runs)
-                    autoencoder.initialize_weights()
-                    autoencoder.train(X_tr, X_tr, X_val, X_val)
-                    #autoencoder.train(Y_tr, X_tr, Y_val, X_val)
-
-                    # Train MLP
-                    mlp_layers = [Layer("input", D, n_input_units=D, apply_sigmoid=True),
-                                  Layer("hidden_1", h1, n_input_units=None, apply_sigmoid=True),
-                                  Layer("hidden_2", h2, n_input_units=None, apply_sigmoid=True),
-                                  Layer("output", K, n_input_units=None, apply_sigmoid=False)
-                                  ]
-                    mlp = MLP(mlp_layers, D, eta, problem_class, n_runs=n_runs, name="value_iteration")
-                    mlp.initialize_weights()
-
-                    # Hook up autoencoder layers
-                    mlp.layers[0] = autoencoder.layers[0]
-                    mlp.layers[1] = autoencoder.layers[1]
-
-                    # Train
-                    mlp.train(Y_tr, X_tr, Y_val, X_val)
-
-                    # Organize validation run results
-                    index = ["eta", "h1", "h2"]
-                    outputs = pd.DataFrame([[x] * n_runs for x in [eta, h1, h2]], index=index).transpose()
-                    outputs["ce_val"] = mlp.val_scores
-                    outputs["acc_val"] = mlp.val_acc
-                    outputs["run"] = range(n_runs)
-                    val_results.append(outputs)
-
-            # Organize dataset results
-            val_results = pd.concat(val_results)
-            val_results["fold"] = fold
-            val_results = val_results.set_index(["fold", "run"]).reset_index()
-            val_results_li.append(val_results)
-
-        val_results = pd.concat(val_results_li)
-        group = ["eta", "h1", "h2"]
-        subset = ["fold", "eta", "h1", "h2"]
-        val_summary = val_results.copy().sort_values(by="ce_val").drop_duplicates(subset=subset)
-        val_summary = val_summary.groupby(group).mean().sort_values(by="ce_val")
-        best_val_params = val_summary.reset_index().iloc[0].to_dict()
-
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Test
-        print(f"\tTest")
-        eta = best_val_params["eta"]
-        h1 = int(best_val_params["h1"])
-        h2 = int(best_val_params["h2"])
-        n_runs = int(best_val_params["run"])
-        for fold in range(1, K_FOLDS + 1):
-            print(f"\t\t{fold}")
-            test_set = test_sets[fold]
-            Y_tr, X_tr = test_set["Y_tr"], test_set["X_tr"]
-            Y_te, X_te = test_set["Y_te"], test_set["X_te"]
-
-            # Train autoencoder
-            layers = [Layer("input", D, n_input_units=D, apply_sigmoid=True),
-                      Layer("hidden_1", h1, n_input_units=None, apply_sigmoid=True),
-                      Layer("output", D, n_input_units=None, apply_sigmoid=False)
-                      ]
-            autoencoder = MLP(layers, D, eta, problem_class, n_runs=n_runs)
-            autoencoder.initialize_weights()
-            autoencoder.train(X_tr, X_tr, X_te, X_te)
-
-            # Instantiate the MLP with the first two layers to be replaced by autoencoder
-            mlp_layers = [Layer("input", D, n_input_units=D, apply_sigmoid=True),
-                          Layer("hidden_1", h1, n_input_units=None, apply_sigmoid=True),
-                          Layer("hidden_2", h2, n_input_units=None, apply_sigmoid=True),
-                          Layer("output", K, n_input_units=None, apply_sigmoid=False)
-                          ]
-            mlp = MLP(mlp_layers, D, eta, problem_class, n_runs=n_runs, name="value_iteration")
-            mlp.initialize_weights()
-
-            # Hook up autoencoder layers
-            mlp.layers[0] = autoencoder.layers[0]
-            mlp.layers[1] = autoencoder.layers[1]
-
-            # Train
-            mlp.train(Y_tr, X_tr, Y_te, X_te)
-
-            # Organize outputs
-            index = ["eta", "h1", "h2"]
-            outputs = pd.DataFrame([[x] * n_runs for x in [eta, h1, h2]], index=index).transpose()
-            outputs["ce_te"] = mlp.val_scores
-            outputs["acc_te"] = accuracy(Y_te, mlp.predict(X_te))
-            outputs["run"] = range(n_runs)
-            outputs["fold"] = fold
-            te_results_li.append(outputs)
-
-        te_results = pd.concat(te_results_li).set_index(["fold", "run"]).reset_index()
-
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Save outputs
-        print("\tSave")
-        te_results_dst = DST_DIR / f"autoencoder_{dataset}_te_results.csv"
-        val_results_dst = DST_DIR / f"autoencoder_{dataset}_val_results.csv"
-        val_summary_dst = DST_DIR / f"autoencoder_{dataset}_val_summary.csv"
-
-        te_results.to_csv(te_results_dst, index=False)
-        val_results.to_csv(val_results_dst, index=False)
-        val_summary.to_csv(val_summary_dst)
+                print('y')
 
 
 if __name__ == "__main__":
-    test_classification_autoencoder()
+    test_value_iteration()
