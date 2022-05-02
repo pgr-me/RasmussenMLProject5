@@ -18,8 +18,8 @@ import numpy as np
 import pandas as pd
 
 # Local imports
-from p5.q_learning import Preprocessor, get_standardization_cols, get_standardization_params, standardize
-from p5.q_learning.split import make_splits
+from p5.q_learning_old import Preprocessor, get_standardization_cols, get_standardization_params, standardize
+from p5.q_learning_old.split import make_splits
 
 
 def run(

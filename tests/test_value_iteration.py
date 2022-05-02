@@ -13,7 +13,7 @@ import pandas as pd
 # Local imports
 from p5.settings import *
 from p5.value_iteration import learn_state
-from p5.environment.track import Track
+from p5.track import Track
 
 warnings.filterwarnings('ignore')
 
@@ -51,7 +51,7 @@ def test_value_iteration():
             indices = track.states.index.values
 
             # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-            # Train over epochs
+            # Train over episodes
             for i in range(15):
                 states["t"] = states["t"] + 1
 
@@ -73,9 +73,8 @@ def test_value_iteration():
 
             # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             # Save output
-            dst = OUT_DIR / f"{track_src.stem}_{oob_penalty}.csv"
+            dst = OUT_DIR / f"value_iteration_{track_src.stem}_{oob_penalty}.csv"
             states.to_csv(dst, index=False)
-            print("stop")
 
 
 if __name__ == "__main__":

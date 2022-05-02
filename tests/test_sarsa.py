@@ -16,11 +16,11 @@ from numba import jit, njit
 import numba as nb
 
 # Local imports
-from p5.q_learning import Preprocessor
+from p5.q_learning_old import Preprocessor
 from p5.sarsa.regression_perceptron import predict, train_perceptron
 from p5.utils import mse
-from p5.q_learning.split import make_splits
-from p5.q_learning.standardization import get_standardization_params, standardize, get_standardization_cols
+from p5.q_learning_old.split import make_splits
+from p5.q_learning_old.standardization import get_standardization_params, standardize, get_standardization_cols
 
 warnings.filterwarnings('ignore')
 

@@ -1,8 +1,8 @@
 import pandas as pd
 
-from p5.environment.track import Track
+from p5.track import Track
 from p5.settings import ACTIONS, GAMMA, P_ACC_SUCCEED, P_ACC_FAIL
-from p5.utils import bresenham, update_velocity
+from p5.utils import bresenham, compute_velocity
 
 
 def compute_state_weights(action_df: pd.DataFrame) -> pd.DataFrame:
@@ -25,19 +25,16 @@ def learn_state(track: Track, states, ix, oob_penalty) -> dict:
     """
     # Extract a dictionary of state attributes: space, position, velocity, reward, time, etc.
     state_di = states.loc[ix].to_dict()
-
+    vel = state_di["x_col_vel"], state_di["y_row_vel"]
     best_action, best_Q_sa = None, -float("inf")
     for action in ACTIONS:
         # Case when action succeeds
-        x_col_acc, y_row_acc = action
-        succeed_vel = update_velocity(state_di, x_col_acc, y_row_acc)
-        succeed_pos_li: list = update_position(state_di, track, succeed_vel[0], succeed_vel[1], oob_penalty=oob_penalty,
-                                               succeed=True)
+        succeed_vel = compute_velocity(vel, action)
+        succeed_pos_li: list = update_position(state_di, track, succeed_vel, oob_penalty=oob_penalty, succeed=True)
 
         # Case when action fails
-        fail_vel = update_velocity(state_di, 0, 0)
-        fail_pos_li: list = update_position(state_di, track, fail_vel[0], fail_vel[1], oob_penalty=oob_penalty,
-                                            succeed=False)
+        fail_vel = compute_velocity(vel, (0, 0))
+        fail_pos_li: list = update_position(state_di, track, fail_vel, oob_penalty=oob_penalty, succeed=False)
 
         # Combine success and failure cases
         actions = pd.concat([pd.DataFrame(succeed_pos_li), pd.DataFrame(fail_pos_li)])
@@ -49,7 +46,9 @@ def learn_state(track: Track, states, ix, oob_penalty) -> dict:
         actions = actions.rename(columns=di).merge(states[labels], on=on, how="left")
 
         # Compute the expected value
-
+        # TODO: Ask if the below is correct
+        # I take reward of current state that I'm in?
+        # Context: the actions df provides values and transition probs corresponding to states reached thru each action
         Q_sa: float = state_di["r"] + GAMMA * (actions.wt * actions.val).sum()  # * state_di["prev_val"]
         if Q_sa > best_Q_sa:
             best_Q_sa = Q_sa
@@ -58,11 +57,12 @@ def learn_state(track: Track, states, ix, oob_penalty) -> dict:
     return best_dict
 
 
-def update_position(state_di: dict, track: Track, x_col_vel_1, y_row_vel_1, oob_penalty="stay-in-place",
+def update_position(state_di: dict, track: Track, vel_1: tuple, oob_penalty="stay-in-place",
                     succeed=True) -> list:
     """
     Update position based on velocity.
     """
+    x_col_vel_1, y_row_vel_1 = vel_1
     x_col_pos_0, y_row_pos_0 = state_di["x_col_pos"], state_di["y_row_pos"]
     x_col_pos_1 = x_col_pos_0 + x_col_vel_1
     y_row_pos_1 = y_row_pos_0 + y_row_vel_1

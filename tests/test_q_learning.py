@@ -1,26 +1,17 @@
 #!/usr/bin/env python3
-"""Peter Rasmussen, Programming Assignment 3, test_q_learning.py
+"""Peter Rasmussen, Programming Assignment 5, test_value_iteration.py
 
 """
 # Standard library imports
-import collections as c
-from copy import deepcopy
-import json
 from pathlib import Path
 import warnings
 
-# Third party imports
-import numpy as np
-import pandas as pd
-from numba import jit, njit
-import numba as nb
-
 # Local imports
-from p5.q_learning import Preprocessor
-from p5.value_iteration.mlp import MLP
-from p5.q_learning.split import make_splits
-from p5.q_learning.standardization import get_standardization_params, standardize, get_standardization_cols
-from p5.utils import mse, sigmoid, shuffle_indices
+from p5.settings import *
+from p5.q_learning import epsilon_greedy_policy, compute_position, compute_temp, state_action_dict, \
+    select_s_prime_index, softmax_policy, update_state_actions
+from p5.track import Track
+from p5.utils import compute_velocity, realize_action
 
 warnings.filterwarnings('ignore')
 
@@ -28,167 +19,98 @@ warnings.filterwarnings('ignore')
 TEST_DIR = Path(".").absolute()
 REPO_DIR = TEST_DIR.parent
 P4_DIR = REPO_DIR / "p5"
-SRC_DIR = REPO_DIR / "data"
-DST_DIR = REPO_DIR / "data" / "out"
-DST_DIR.mkdir(exist_ok=True, parents=True)
+DATA_DIR = REPO_DIR / "data"
+IN_DIR = DATA_DIR / "in"
+OUT_DIR = DATA_DIR / "out"
 THRESH = 0.01
 K_FOLDS = 5
 VAL_FRAC = 0.2
 
-# Load data catalog and tuning params
-with open(SRC_DIR / "data_catalog.json", "r") as file:
-    data_catalog = json.load(file)
-data_catalog = {k: v for k, v in data_catalog.items() if k in ["forestfires", "machine", "abalone"]}
+track_srcs = [x for x in IN_DIR.iterdir() if x.stem == "toy-track"]
+OOB_PENALTIES = ["stay-in-place", "back-to-beginning"]
+# Select policy
+policy = softmax_policy
 
 
-def test_regression_mlp():
+def test_value_iteration():
+    """
+    Test value iteration algorithm.
+    """
     # Iterate over each dataset
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    for dataset, dataset_meta in data_catalog.items():
-        print(dataset)
+    for track_src in track_srcs:
+        for oob_penalty in OOB_PENALTIES:
+            print(track_src.stem)
 
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Preprocess dataset
-        preprocessor = Preprocessor(dataset, dataset_meta, SRC_DIR)
-        preprocessor.load()
-        preprocessor.drop()
-        preprocessor.identify_features_label_id()
-        preprocessor.replace()
-        preprocessor.log_transform()
-        preprocessor.set_data_classes()
-        preprocessor.impute()
-        preprocessor.dummy()
-        preprocessor.set_data_classes()
-        preprocessor.shuffle()
+            # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+            # Make the track and possible states
+            track = Track(track_src)
+            track.prep_track()
+            track.make_states()
+            track.make_state_actions()
+            track.sort_state_actions()
+            state_actions = track.state_actions.copy()
+            states = track.states.copy()
+            indices = track.states.index.values
+            # TODO: Select nearest non-finish, non-wall square?
+            ix = indices[0]
+            # TODO: Global temp or temp that is function of number of visits to current state?
+            temp = INIT_TEMP
 
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Extract feature and label columns
-        label = preprocessor.label
-        features = [x for x in preprocessor.features if x != label]
-        problem_class = dataset_meta["problem_class"]
-        data = preprocessor.data.copy()
-        data = data[[label] + features]
-        if problem_class == "classification":
-            data[label] = data[label].astype(int)
+            # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+            # Train over episodes
+            for episode in range(10000):
+                state_actions.sort_values(by="q", ascending=False, inplace=True)
 
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Assign folds
-        data["fold"] = make_splits(data, problem_class, label, k_folds=K_FOLDS, val_frac=None)
+                # TODO: I iterate over states? Not state-action pairs, correct?
+                # Choose action using policy derived from Q
+                base_state_di = track.states.loc[ix].to_dict()
+                pos = base_state_di["x_col_pos"], base_state_di["y_row_pos"]
+                vel = base_state_di["x_col_vel"], base_state_di["y_row_vel"]
 
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Validate: Iterate over each fold-run
-        print(f"\tValidate")
-        val_results_li = []
-        test_sets = {}
-        etas = {}
-        te_results_li = []
-        from p5.value_iteration.layer import Layer
-        for fold in range(1, K_FOLDS + 1):
-            print(f"\t\t{fold}")
-            test_mask = data["fold"] == fold
-            test = data.copy()[test_mask].drop(axis=1, labels="fold")  # We'll save the test for use later
-            train_val = data.copy()[~test_mask].drop(axis=1, labels="fold")
-            train_val["train"] = make_splits(train_val, problem_class, label, k_folds=None, val_frac=VAL_FRAC)
-            train_mask = train_val["train"] == 1
-            train = train_val.copy()[train_mask].drop(axis=1, labels="train")
-            val = train_val.copy()[~train_mask].drop(axis=1, labels="train")
+                # Case when car is already on finish line: this state is a sink and we need not go further
+                # TODO: Is it a good idea to have the finish states act as "sinks" to basically stop further computation?
+                # TODO: Wouldn't Q' just be zero in this case?
+                # if (x_col_pos, y_row_pos) in track.finish_cells:
+                #    x_col_acc, y_row_acc = 0, 0
+                #    x_col_vel_1, y_row_vel_1 = 0, 0
+                #    x_col_pos_1, y_row_pos_1 = x_col_pos_0, y_row_pos_0
 
-            # Get standardization parameters from training-validation set
-            cols = get_standardization_cols(train, features)
-            means, std_devs = get_standardization_params(train.copy()[cols])
+                # Apply policy to get action
+                if policy == softmax_policy:
+                    acc = softmax_policy(pos, vel, state_actions, temp)
+                else:
+                    acc = epsilon_greedy_policy(pos, vel, state_actions, epsilon=EPSILON)
+                state_action_di = state_action_dict(pos, vel, acc, state_actions)
+                q = state_action_di["q"]
+                r = state_action_di["r"]
 
-            # Standardize data
-            train = train.drop(axis=1, labels=cols).join(standardize(train[cols], means, std_devs))
-            val = val.drop(axis=1, labels=cols).join(standardize(val[cols], means, std_devs))
-            test = test.drop(axis=1, labels=cols).join(standardize(test[cols], means, std_devs))  # Save test for later
+                # Find Q of s prime-a prime pair
+                acc_real = realize_action(acc)
+                vel_prime = compute_velocity(vel, acc_real)
+                pos_prime = compute_position(pos, vel_prime, track)
+                acc_prime = epsilon_greedy_policy(pos_prime, vel_prime, state_actions)
+                state_action_prime_di = state_action_dict(pos_prime, vel_prime, acc_prime, state_actions)
+                q_prime = state_action_prime_di["q"]
 
-            YX_tr = train.copy().astype(np.float64).values
-            YX_te = test.copy().astype(np.float64).values  # Save test for later
-            YX_val = val.copy().astype(np.float64).values
-            Y_tr, X_tr = YX_tr[:, 0].reshape(len(YX_tr), 1), YX_tr[:, 1:]
-            test_sets[fold] = dict(Y_te=YX_te[:, 0].reshape(len(YX_te), 1), X_te=YX_te[:, 1:],
-                                   Y_tr=Y_tr, X_tr=X_tr)  # Save test for later
-            Y_val, X_val = YX_val[:, 0].reshape(len(YX_val), 1), YX_val[:, 1:]
+                # Compute new Q
+                # TODO: I reduce ETA over time, right?
+                new_q = q + ETA * (r + GAMMA * q_prime - q)
+                state_actions = update_state_actions(new_q, pos, vel, acc, state_actions)
 
-            D = X_val.shape[1]
-            H = 4
-            K = 4
+                sanity_check = state_actions.loc[pos[0], pos[1], vel[0], vel[1], acc[0], acc[1]].loc["q"]
+                print(f"Episode {episode}, index {ix}, q={sanity_check}, temp={temp:.3f}")
 
-            n_runs = 50
-            hidden_units_li = [[10, 10], [10, 8], [8, 6], [6, 6], [10, 6], [6, 4], [4, 2]]
-            #hidden_units_li = [[10, 10], [10, 8]]
-            val_results = []
-            for eta in [0.00001, 0.0001, 0.001, 0.01, 0.1, 0.2, 0.4, 1]:
-            #for eta in [0.00001, 0.0001]:
-                for hidden_units in hidden_units_li:
-                    h1, h2 = hidden_units
-                    layers = [Layer("input", D, n_input_units=D, apply_sigmoid=True),
-                              Layer("hidden_1", h1, n_input_units=None, apply_sigmoid=True),
-                              Layer("hidden_2", h2, n_input_units=None, apply_sigmoid=True),
-                              Layer("output", 1, n_input_units=None, apply_sigmoid=False)
-                              ]
-                    mlp = MLP(layers, D, eta, problem_class, n_runs=n_runs)
-                    mlp.initialize_weights()
-                    mlp.train(Y_tr, X_tr, Y_val, X_val)
-                    index = ["eta", "h1", "h2"]
-                    outputs = pd.DataFrame([[x] * n_runs for x in [eta, h1, h2]], index=index).transpose()
-                    outputs["mse_val"] = mlp.val_scores
-                    outputs["run"] = range(n_runs)
-                    val_results.append(outputs)
-            val_results = pd.concat(val_results)
-            val_results["fold"] = fold
-            val_results = val_results.set_index(["fold", "run"]).reset_index()
-            val_results_li.append(val_results)
+                # TODO: What should I save for the learning curve?
+                # Update index corresponding to s' and update temperature
+                ix = select_s_prime_index(pos_prime, vel_prime, states)
+                temp = compute_temp(temp, dissipation_frac=TEMP_DISSIPATION_FRAC)
 
-        val_results = pd.concat(val_results_li)
-        group = ["eta", "h1", "h2"]
-        subset = ["fold", "eta", "h1", "h2"]
-        val_summary = val_results.copy().sort_values(by="mse_val").drop_duplicates(subset=subset)
-        val_summary = val_summary.groupby(group).mean().sort_values(by="mse_val")
-        best_val_params = val_summary.reset_index().iloc[0].to_dict()
-
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Test
-        print(f"\tTest")
-        eta = best_val_params["eta"]
-        h1 = int(best_val_params["h1"])
-        h2 = int(best_val_params["h2"])
-        n_runs = int(best_val_params["run"])
-        for fold in range(1, K_FOLDS + 1):
-            print(f"\t\t{fold}")
-            test_set = test_sets[fold]
-            Y_tr, X_tr = test_set["Y_tr"], test_set["X_tr"]
-            Y_te, X_te = test_set["Y_te"], test_set["X_te"]
-            layers = [Layer("input", D, n_input_units=D, apply_sigmoid=True),
-                      Layer("hidden_1", h1, n_input_units=None, apply_sigmoid=True),
-                      Layer("hidden_2", h2, n_input_units=None, apply_sigmoid=True),
-                      Layer("output", 1, n_input_units=None, apply_sigmoid=False)
-                      ]
-
-            mlp = MLP(layers, D, eta, problem_class, n_runs=n_runs)
-            mlp.initialize_weights()
-            mlp.train(Y_tr, X_tr, Y_te, X_te)
-
-            index = ["eta", "h1", "h2"]
-            outputs = pd.DataFrame([[x] * n_runs for x in [eta, h1, h2]], index=index).transpose()
-            outputs["mse_te"] = mlp.val_scores
-            outputs["run"] = range(n_runs)
-            outputs["fold"] = fold
-            te_results_li.append(outputs)
-
-        te_results = pd.concat(te_results_li).set_index(["fold", "run"]).reset_index()
-
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Save outputs
-        print("\tSave")
-        te_results_dst = DST_DIR / f"mlp_{dataset}_te_results.csv"
-        val_results_dst = DST_DIR / f"mlp_{dataset}_val_results.csv"
-        val_summary_dst = DST_DIR / f"mlp_{dataset}_val_summary.csv"
-
-        te_results.to_csv(te_results_dst, index=False)
-        val_results.to_csv(val_results_dst, index=False)
-        val_summary.to_csv(val_summary_dst)
+            # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+            # Save output
+            dst = OUT_DIR / f"q_learning_{track_src.stem}_{oob_penalty}.csv"
+            state_actions.to_csv(dst, index=False)
 
 
 if __name__ == "__main__":
-    test_regression_mlp()
+    test_value_iteration()
