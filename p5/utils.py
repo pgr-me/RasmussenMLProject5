@@ -82,29 +82,6 @@ def minkowski_distance(x, y, p=2):
     return np.power(power_sum.T, 1 / p)
 
 
-def minkowski_distances(X: np.array, Y: np.array, p: int = 2) -> np.array:
-    """
-    Compute Minkowski distances between two matrices.
-    :param X: Array of points where each row is a point and each column is a dimension
-    :param Y: Array of points where each row is a point and each column is a dimension
-    :param p: p-norm
-    :return: Array of distances between each observation in X and Y
-    Output includes same-point distances (e.g., point 1 distance from point 1 distance is computed).
-    Output ordered s.t. point 1 (P1) repeated across points 1 to m, P2 repeated across points 1 to m, etc.
-    p-norm = 1 for Manhattan distance, 2 for Euclidean distance, etc.
-    Example output:
-        array([0, 6.38634802, 8.75831689, ..., 7.43018813, 6.41678194])
-    From https://github.com/pgr-me/RasmussenMLProject2/blob/main/p2/algorithms/utils.py
-    ^^That's me
-    """
-    row_repeat = np.repeat(X, len(Y), axis=0)
-    stacked = np.vstack([Y for y in range(len(X))])
-    diff = np.abs(np.subtract(row_repeat, stacked))
-    power = np.power(diff, p * np.ones(diff.shape))
-    power_sum = np.sum(power, axis=1)
-    return np.power(power_sum, np.ones(power_sum.shape) / p)
-
-
 def realize_action(acc: tuple) -> tuple:
     """
     Get resulting acceleration.

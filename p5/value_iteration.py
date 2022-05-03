@@ -6,6 +6,11 @@ from p5.utils import bresenham, compute_velocity
 
 
 def compute_state_weights(action_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Compute weights / transition probabilities for one state.
+    :param action_df: Table of actions
+    :return: Updated actions table that includes state weights / transition probabilities
+    """
     mask = action_df["s"]
     succeed_tot = mask.sum()
     fail_tot = len(action_df) - succeed_tot
@@ -43,13 +48,10 @@ def learn_state(track: Track, states, ix, oob_penalty) -> dict:
               "y_row_pos_1": "y_row_pos"}
         labels = ["x_col_vel", "y_row_vel", "x_col_pos", "y_row_pos", "val"]
         on = [x for x in labels if x != "val"]
-        actions = actions.rename(columns=di).merge(states[labels], on=on, how="left")
+        actions: pd.DataFrame = actions.rename(columns=di).merge(states[labels], on=on, how="left")
 
         # Compute the expected value
-        # TODO: Ask if the below is correct
-        # I take reward of current state that I'm in?
-        # Context: the actions df provides values and transition probs corresponding to states reached thru each action
-        Q_sa: float = state_di["r"] + GAMMA * (actions.wt * actions.val).sum()  # * state_di["prev_val"]
+        Q_sa: float = state_di["r"] + GAMMA * (actions.wt * actions.val).sum()
         if Q_sa > best_Q_sa:
             best_Q_sa = Q_sa
             best_action = action

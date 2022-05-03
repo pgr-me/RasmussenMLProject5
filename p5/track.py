@@ -12,11 +12,9 @@ import numpy as np
 import pandas as pd
 
 # Local imports
-from p5.settings import ACTIONS, VELOCITIES
+from p5.settings import ACTIONS, INIT_VAL, VELOCITIES
 from p5.utils import minkowski_distance
 
-
-# TODO: For the video demo, can I use a toy example? (show toy track)
 
 class Track:
     def __init__(self, src: Path, oob_penalty: str = "stay-in-place"):
@@ -77,10 +75,11 @@ class Track:
                     for y_row_vel in VELOCITIES:
                         for x_col_vel in VELOCITIES:
                             r = 0 if space == "F" else -1
+                            val = 0 if space == "F" else INIT_VAL
                             fin = True if space == "F" else False
                             state = dict(space=space, y_row_pos=y_row_pos, x_col_pos=x_col_pos, y_row_vel=y_row_vel,
-                                         x_col_vel=x_col_vel, r=r, fin=fin, prev_val=0, val=0, t=0, best_x_col_a=np.nan,
-                                         best_y_row_a=np.nan)
+                                         x_col_vel=x_col_vel, r=r, fin=fin, prev_val=0, val=val, t=0,
+                                         best_x_col_a=np.nan, best_y_row_a=np.nan)
                             states.append(state)
         states = pd.DataFrame(states)
         self.states = states
@@ -99,9 +98,9 @@ class Track:
                     for y_row_vel in VELOCITIES:
                         for x_col_vel in VELOCITIES:
                             for action in ACTIONS:
-                                # TODO: Add
                                 x_col_acc, y_row_acc = action
                                 r = 0 if space == "F" else -1
+                                q = 0 if space == "F" else -10
                                 fin = True if space == "F" else False
                                 state_action = dict(space=space, y_row_pos=y_row_pos, x_col_pos=x_col_pos,
                                                     y_row_vel=y_row_vel, x_col_vel=x_col_vel, x_col_acc=x_col_acc,
@@ -121,7 +120,7 @@ class Track:
         mean_finish_pos = np.array([mean_finish_pos["x_col_pos"], mean_finish_pos["y_row_pos"]])
         state_pos_arr = self.states.copy()[["x_col_pos", "y_row_pos"]].values
         self.states["fin_dist"] = minkowski_distance(mean_finish_pos, state_pos_arr)
-        self.states.sort_values(by=["space", "fin_dist"], ascending=[True, True], inplace=True)
+        self.states.sort_values(by=["space", "t", "fin_dist"], ascending=[True, True, True], inplace=True)
         return self.states
 
 

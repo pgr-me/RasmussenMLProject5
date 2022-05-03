@@ -6,10 +6,13 @@
 from pathlib import Path
 import warnings
 
+# Third party imports
+import pandas as pd
+
 # Local imports
 from p5.settings import *
-from p5.q_learning import epsilon_greedy_policy, compute_position, compute_temp, state_action_dict, \
-    select_s_prime_index, softmax_policy, update_state_actions
+from p5.q_learning import epsilon_greedy_policy, compute_position, compute_temp, is_terminal, select_s_prime_index, \
+    softmax_policy, state_action_dict, update_state_actions
 from p5.track import Track
 from p5.utils import compute_velocity, realize_action
 
@@ -50,16 +53,16 @@ def test_value_iteration():
             track.make_state_actions()
             track.sort_state_actions()
             state_actions = track.state_actions.copy()
-            states = track.states.copy()
-            indices = track.states.index.values
+            ix = track.states.index.values[0]
             # TODO: Select nearest non-finish, non-wall square?
-            ix = indices[0]
             # TODO: Global temp or temp that is function of number of visits to current state?
             temp = INIT_TEMP
 
             # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             # Train over episodes
-            for episode in range(10000):
+            ix_check = 5 * [None]
+            history = []
+            for episode in range(20000):
                 state_actions.sort_values(by="q", ascending=False, inplace=True)
 
                 # TODO: I iterate over states? Not state-action pairs, correct?
@@ -67,14 +70,6 @@ def test_value_iteration():
                 base_state_di = track.states.loc[ix].to_dict()
                 pos = base_state_di["x_col_pos"], base_state_di["y_row_pos"]
                 vel = base_state_di["x_col_vel"], base_state_di["y_row_vel"]
-
-                # Case when car is already on finish line: this state is a sink and we need not go further
-                # TODO: Is it a good idea to have the finish states act as "sinks" to basically stop further computation?
-                # TODO: Wouldn't Q' just be zero in this case?
-                # if (x_col_pos, y_row_pos) in track.finish_cells:
-                #    x_col_acc, y_row_acc = 0, 0
-                #    x_col_vel_1, y_row_vel_1 = 0, 0
-                #    x_col_pos_1, y_row_pos_1 = x_col_pos_0, y_row_pos_0
 
                 # Apply policy to get action
                 if policy == softmax_policy:
@@ -92,24 +87,48 @@ def test_value_iteration():
                 acc_prime = epsilon_greedy_policy(pos_prime, vel_prime, state_actions)
                 state_action_prime_di = state_action_dict(pos_prime, vel_prime, acc_prime, state_actions)
                 q_prime = state_action_prime_di["q"]
-
+                # TODO: How should I simulate / visualize this? Just let an agent start at start at some velocity and go?
                 # Compute new Q
                 # TODO: I reduce ETA over time, right?
+                # Let it be, let ETA be
                 new_q = q + ETA * (r + GAMMA * q_prime - q)
+                assert new_q <= 0
                 state_actions = update_state_actions(new_q, pos, vel, acc, state_actions)
 
                 sanity_check = state_actions.loc[pos[0], pos[1], vel[0], vel[1], acc[0], acc[1]].loc["q"]
-                print(f"Episode {episode}, index {ix}, q={sanity_check}, temp={temp:.3f}")
+                print(f"Episode {episode}, index {ix}, temp={temp:.3f}, q={sanity_check:.3f}")
 
                 # TODO: What should I save for the learning curve?
+                # TODO: YOU ONLY NEED ONE TERMINAL Q
+                # TODO: DON'T RESET THE TEMPERATURE WHEN YOU HIT TERMINAL STATE
                 # Update index corresponding to s' and update temperature
-                ix = select_s_prime_index(pos_prime, vel_prime, states)
+                ix_check.append(ix)
+                ix_check = ix_check[-5:]
                 temp = compute_temp(temp, dissipation_frac=TEMP_DISSIPATION_FRAC)
+                # Start somewhere else if Q corresponds to terminal state or if algo stuck in same state-action pair
+                # TODO: Add dataframe
+                history.append(state_actions.loc[pos[0], pos[1], vel[0], vel[1], acc[0], acc[1]].to_frame().transpose())
+
+
+                if is_terminal(new_q) or (len(set(ix_check)) == 1):
+                    print("\tReset next state")
+                    track.sort_state_actions()
+                    ix = track.states.index.values[0]
+                # If one of last 4 episodes have nonzero Q values, take s' as next state
+                else:
+                    ix = select_s_prime_index(pos_prime, vel_prime, track.states)
 
             # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-            # Save output
-            dst = OUT_DIR / f"q_learning_{track_src.stem}_{oob_penalty}.csv"
-            state_actions.to_csv(dst, index=False)
+            # Organize and save output
+            history = pd.concat(history)
+            names = ["x_col_pos", "y_row_pos", "x_col_vel", "y_row_vel", "x_col_acc", "y_row_acc"]
+            mix = pd.MultiIndex.from_tuples(history.index.values, names=names)
+            history.index = mix
+
+            state_actions_dst = OUT_DIR / f"q_learning_state_actions_{track_src.stem}_{oob_penalty}.csv"
+            history_dst = OUT_DIR / f"q_learning_history_{track_src.stem}_{oob_penalty}.csv"
+            state_actions.to_csv(state_actions_dst)
+            history.to_csv(history_dst)
 
 
 if __name__ == "__main__":

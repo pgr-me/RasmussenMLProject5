@@ -40,7 +40,7 @@ def test_value_iteration():
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     for track_src in track_srcs:
         for oob_penalty in OOB_PENALTIES:
-            print(track_src.stem)
+            print(f"{track_src.stem}, OOB penalty={oob_penalty}")
 
             # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             # Make the track and possible states
@@ -49,10 +49,11 @@ def test_value_iteration():
             track.make_states()
             states = track.states.copy()
             indices = track.states.index.values
+            learning_curve = []
 
             # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             # Train over episodes
-            for i in range(15):
+            for episode in range(20):
                 states["t"] = states["t"] + 1
 
                 # Learn the states
@@ -67,14 +68,17 @@ def test_value_iteration():
 
                 # Exit loop if greatest improvement less than threshold
                 max_diff = (states["val"] - states["prev_val"]).abs().max()
-                print(f'Iteration {i}: max diff={max_diff:.2f}')
+                print(f'Iteration {episode}: max diff={max_diff:.2f}')
+                learning_curve.append(dict(episode=episode, max_diff=max_diff))
                 if max_diff <= VALUE_ITERATION_TERMINATION_THRESHOLD:
                     break
 
             # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             # Save output
-            dst = OUT_DIR / f"value_iteration_{track_src.stem}_{oob_penalty}.csv"
-            states.to_csv(dst, index=False)
+            states_dst = OUT_DIR / f"value_iteration_states_{track_src.stem}_{oob_penalty}.csv"
+            learning_curve_dst = OUT_DIR / f"value_iteration_learning_curve_{track_src.stem}_{oob_penalty}.csv"
+            states.to_csv(states_dst, index=False)
+            pd.DataFrame(learning_curve).to_csv(learning_curve_dst, index=False)
 
 
 if __name__ == "__main__":
