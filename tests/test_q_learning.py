@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Peter Rasmussen, Programming Assignment 5, test_value_iteration.py
+"""Peter Rasmussen, Programming Assignment 5, test_q_learning.py
 
 """
 # Standard library imports
@@ -11,8 +11,8 @@ import pandas as pd
 
 # Local imports
 from p5.settings import *
-from p5.q_learning import epsilon_greedy_policy, compute_position, compute_temp, is_terminal, select_s_prime_index, \
-    softmax_policy, state_action_dict, update_state_actions
+from p5.q_learning_sarsa import epsilon_greedy_policy, compute_position, compute_temp, is_terminal, \
+    select_s_prime_index, softmax_policy, state_action_dict, update_state_actions
 from p5.track import Track
 from p5.utils import compute_velocity, realize_action
 
@@ -35,7 +35,7 @@ OOB_PENALTIES = ["stay-in-place", "back-to-beginning"]
 policy = softmax_policy
 
 
-def test_value_iteration():
+def test_q_learning():
     """
     Test value iteration algorithm.
     """
@@ -65,7 +65,6 @@ def test_value_iteration():
             for episode in range(20000):
                 state_actions.sort_values(by="q", ascending=False, inplace=True)
 
-                # TODO: I iterate over states? Not state-action pairs, correct?
                 # Choose action using policy derived from Q
                 base_state_di = track.states.loc[ix].to_dict()
                 pos = base_state_di["x_col_pos"], base_state_di["y_row_pos"]
@@ -84,31 +83,26 @@ def test_value_iteration():
                 acc_real = realize_action(acc)
                 vel_prime = compute_velocity(vel, acc_real)
                 pos_prime = compute_position(pos, vel_prime, track)
-                acc_prime = epsilon_greedy_policy(pos_prime, vel_prime, state_actions)
+                # Choose action that maximizes Q for state s'
+                acc_prime = state_actions.loc[pos_prime[0], pos_prime[1], vel_prime[0], vel_prime[1]]\
+                    .sort_values(by="q", ascending=False).iloc[0].name
                 state_action_prime_di = state_action_dict(pos_prime, vel_prime, acc_prime, state_actions)
                 q_prime = state_action_prime_di["q"]
-                # TODO: How should I simulate / visualize this? Just let an agent start at start at some velocity and go?
+
                 # Compute new Q
-                # TODO: I reduce ETA over time, right?
-                # Let it be, let ETA be
-                new_q = q + ETA * (r + GAMMA * q_prime - q)
+                new_q = q + ETA * (r + GAMMA * q_prime - q)  # Keep ETA constant
                 assert new_q <= 0
                 state_actions = update_state_actions(new_q, pos, vel, acc, state_actions)
 
                 sanity_check = state_actions.loc[pos[0], pos[1], vel[0], vel[1], acc[0], acc[1]].loc["q"]
                 print(f"Episode {episode}, index {ix}, temp={temp:.3f}, q={sanity_check:.3f}")
 
-                # TODO: What should I save for the learning curve?
-                # TODO: YOU ONLY NEED ONE TERMINAL Q
-                # TODO: DON'T RESET THE TEMPERATURE WHEN YOU HIT TERMINAL STATE
                 # Update index corresponding to s' and update temperature
                 ix_check.append(ix)
                 ix_check = ix_check[-5:]
                 temp = compute_temp(temp, dissipation_frac=TEMP_DISSIPATION_FRAC)
                 # Start somewhere else if Q corresponds to terminal state or if algo stuck in same state-action pair
-                # TODO: Add dataframe
                 history.append(state_actions.loc[pos[0], pos[1], vel[0], vel[1], acc[0], acc[1]].to_frame().transpose())
-
 
                 if is_terminal(new_q) or (len(set(ix_check)) == 1):
                     print("\tReset next state")
@@ -132,4 +126,4 @@ def test_value_iteration():
 
 
 if __name__ == "__main__":
-    test_value_iteration()
+    test_q_learning()

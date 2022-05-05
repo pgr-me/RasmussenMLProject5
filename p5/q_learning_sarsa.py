@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Peter Rasmussen, Programming Assignment 5, q_learning.py
+"""Peter Rasmussen, Programming Assignment 5, q_learning_sarsa.py
 
-This module provides the functions used for Q-learning.
+This module provides the functions used for Q-learning and SARSA.
 
 """
 # Third party imports
