@@ -1,26 +1,20 @@
 #!/usr/bin/env python3
-"""Peter Rasmussen, Programming Assignment 4, test_sarsa.py
+"""Peter Rasmussen, Programming Assignment 5, test_sarsa.py
 
 """
 # Standard library imports
-import collections as c
-from copy import deepcopy
-import json
 from pathlib import Path
 import warnings
 
 # Third party imports
-import numpy as np
 import pandas as pd
-from numba import jit, njit
-import numba as nb
 
 # Local imports
-from p5.q_learning_old import Preprocessor
-from p5.sarsa.regression_perceptron import predict, train_perceptron
-from p5.utils import mse
-from p5.q_learning_old.split import make_splits
-from p5.q_learning_old.standardization import get_standardization_params, standardize, get_standardization_cols
+from p5.settings import *
+from p5.q_learning_sarsa import epsilon_greedy_policy, compute_position, compute_temp, is_terminal, \
+    select_s_prime_index, softmax_policy, state_action_dict, update_state_actions
+from p5.track import Track
+from p5.utils import compute_velocity, realize_action
 
 warnings.filterwarnings('ignore')
 
@@ -28,124 +22,106 @@ warnings.filterwarnings('ignore')
 TEST_DIR = Path(".").absolute()
 REPO_DIR = TEST_DIR.parent
 P4_DIR = REPO_DIR / "p5"
-SRC_DIR = REPO_DIR / "data"
-DST_DIR = REPO_DIR / "data" / "out"
-DST_DIR.mkdir(exist_ok=True, parents=True)
+DATA_DIR = REPO_DIR / "data"
+IN_DIR = DATA_DIR / "in"
+OUT_DIR = DATA_DIR / "out"
 THRESH = 0.01
 K_FOLDS = 5
 VAL_FRAC = 0.2
 
-# Load data catalog and tuning params
-with open(SRC_DIR / "data_catalog.json", "r") as file:
-    data_catalog = json.load(file)
-data_catalog = {k: v for k, v in data_catalog.items() if k in ["forestfires", "machine", "abalone"]}
+track_srcs = [x for x in IN_DIR.iterdir() if x.stem == "toy-track"]
+OOB_PENALTIES = ["stay-in-place", "back-to-beginning"]
+# Select policy
+policy = softmax_policy
 
 
-def test_regression_perceptron():
+def test_sarsa():
+    """
+    Test value iteration algorithm.
+    """
     # Iterate over each dataset
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    for dataset_name, dataset_meta in data_catalog.items():
-        print(dataset_name)
+    for track_src in track_srcs:
+        for oob_penalty in OOB_PENALTIES:
+            print(track_src.stem)
 
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Preprocess dataset
-        preprocessor = Preprocessor(dataset_name, dataset_meta, SRC_DIR)
-        preprocessor.load()
-        preprocessor.drop()
-        preprocessor.identify_features_label_id()
-        preprocessor.replace()
-        preprocessor.log_transform()
-        preprocessor.set_data_classes()
-        preprocessor.impute()
-        preprocessor.dummy()
-        preprocessor.set_data_classes()
-        preprocessor.shuffle()
+            # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+            # Make the track and possible states
+            track = Track(track_src)
+            track.prep_track()
+            track.make_states()
+            track.make_state_actions()
+            track.sort_state_actions()
+            state_actions = track.state_actions.copy()
+            ix = track.states.index.values[0]
+            # TODO: Select nearest non-finish, non-wall square?
+            # TODO: Global temp or temp that is function of number of visits to current state?
+            temp = INIT_TEMP
 
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Extract feature and label columns
-        label = preprocessor.label
-        features = [x for x in preprocessor.features if x != label]
-        problem_class = dataset_meta["problem_class"]
-        data = preprocessor.data.copy()
-        data = data[[label] + features]
-        if problem_class == "classification":
-            data[label] = data[label].astype(int)
+            # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+            # Train over episodes
+            ix_check = 5 * [None]
+            history = []
+            for episode in range(20000):
+                state_actions.sort_values(by="q", ascending=False, inplace=True)
 
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Assign folds
-        data["fold"] = make_splits(data, problem_class, label, k_folds=K_FOLDS, val_frac=None)
+                # Choose action using policy derived from Q
+                base_state_di = track.states.loc[ix].to_dict()
+                pos = base_state_di["x_col_pos"], base_state_di["y_row_pos"]
+                vel = base_state_di["x_col_vel"], base_state_di["y_row_vel"]
 
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Validate: Iterate over each fold-run
-        print(f"\tValidate")
-        val_results_li = []
-        test_sets = {}
-        etas = {}
-        te_results_li = []
-        for fold in range(1, K_FOLDS + 1):
-            print(f"\t\t{fold}")
-            test_mask = data["fold"] == fold
-            test = data.copy()[test_mask].drop(axis=1, labels="fold")  # We'll save the test for use later
-            train_val = data.copy()[~test_mask].drop(axis=1, labels="fold")
-            train_val["train"] = make_splits(train_val, problem_class, label, k_folds=None, val_frac=VAL_FRAC)
-            train_mask = train_val["train"] == 1
-            train = train_val.copy()[train_mask].drop(axis=1, labels="train")
-            val = train_val.copy()[~train_mask].drop(axis=1, labels="train")
+                # Apply policy to get action
+                if policy == softmax_policy:
+                    acc = softmax_policy(pos, vel, state_actions, temp)
+                else:
+                    acc = epsilon_greedy_policy(pos, vel, state_actions, epsilon=EPSILON)
+                state_action_di = state_action_dict(pos, vel, acc, state_actions)
+                q = state_action_di["q"]
+                r = state_action_di["r"]
 
-            # Get standardization parameters from training-validation set
-            cols = get_standardization_cols(train, features)
-            means, std_devs = get_standardization_params(train.copy()[cols])
+                # Find Q of s prime-a prime pair
+                acc_real = realize_action(acc)
+                vel_prime = compute_velocity(vel, acc_real)
+                pos_prime = compute_position(pos, vel_prime, track)
+                acc_prime = epsilon_greedy_policy(pos_prime, vel_prime, state_actions)
+                state_action_prime_di = state_action_dict(pos_prime, vel_prime, acc_prime, state_actions)
+                q_prime = state_action_prime_di["q"]
 
-            # Standardize data
-            train = train.drop(axis=1, labels=cols).join(standardize(train[cols], means, std_devs))
-            val = val.drop(axis=1, labels=cols).join(standardize(val[cols], means, std_devs))
-            test = test.drop(axis=1, labels=cols).join(standardize(test[cols], means, std_devs))  # Save test for later
+                # Compute new Q
+                new_q = q + ETA * (r + GAMMA * q_prime - q)  # Don't change ETA
+                assert new_q <= 0
+                state_actions = update_state_actions(new_q, pos, vel, acc, state_actions)
 
-            # Add bias terms
-            train["intercept"] = 1
-            val["intercept"] = 1
-            test["intercept"] = 1  # Save test for later
+                sanity_check = state_actions.loc[pos[0], pos[1], vel[0], vel[1], acc[0], acc[1]].loc["q"]
+                print(f"Episode {episode}, index {ix}, temp={temp:.3f}, q={sanity_check:.3f}")
 
-            YX_tr = train.copy().astype(np.float64).values
-            YX_te = test.copy().astype(np.float64).values  # Save test for later
-            YX_val = val.copy().astype(np.float64).values
-            Y_tr, X_tr = YX_tr[:, 0].reshape(len(YX_tr), 1), YX_tr[:, 1:]
-            test_sets[fold] = dict(Y_te=YX_te[:, 0].reshape(len(YX_te), 1), X_te=YX_te[:, 1:])  # Save test for later
-            Y_val, X_val = YX_val[:, 0].reshape(len(YX_val), 1), YX_val[:, 1:]
-            for eta in [0.00001, 0.0001, 0.001, 0.01, 0.1, 0.2, 0.4, 1]:
-                w_tr = train_perceptron(Y_tr, X_tr, eta, thresh=THRESH)
-                Yhat_val = predict(X_val, w_tr)
-                mse_val = mse(Y_val, Yhat_val)
-                val_results_li.append(dict(dataset_name=dataset_name, fold=fold, eta=eta, mse_val=mse_val))
-                etas[(fold, eta)] = w_tr  # Save etas for later
-        val_results = pd.DataFrame(val_results_li)
-        val_summary = val_results.groupby("eta")["mse_val"].mean().sort_values().to_frame()
-        best_eta = val_summary.index.values[0]
+                # Update index corresponding to s' and update temperature
+                ix_check.append(ix)
+                ix_check = ix_check[-5:]
+                temp = compute_temp(temp, dissipation_frac=TEMP_DISSIPATION_FRAC)
+                # Start somewhere else if Q corresponds to terminal state or if algo stuck in same state-action pair
+                history.append(state_actions.loc[pos[0], pos[1], vel[0], vel[1], acc[0], acc[1]].to_frame().transpose())
 
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Test
-        print(f"\tTest")
-        for fold in range(1, K_FOLDS + 1):
-            print(f"\t\t{fold}")
-            w_tr = etas[(fold, best_eta)]
-            Y_te, X_te = test_sets[fold]["Y_te"], test_sets[fold]["X_te"]
-            Yhat_te = predict(X_te, w_tr)
-            mse_te = mse(Y_te, Yhat_te)
-            te_results_li.append(dict(problem_class=problem_class, dataset_name=dataset_name, fold=fold, mse_te=mse_te,
-                                      best_eta=best_eta))
-        te_results = pd.DataFrame(te_results_li)
+                if is_terminal(new_q) or (len(set(ix_check)) == 1):
+                    print("\tReset next state")
+                    track.sort_state_actions()
+                    ix = track.states.index.values[0]
+                # If one of last 4 episodes have nonzero Q values, take s' as next state
+                else:
+                    ix = select_s_prime_index(pos_prime, vel_prime, track.states)
 
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Save outputs
-        print("\tSave")
-        te_results_dst = DST_DIR / f"perceptron_{dataset_name}_te_results.csv"
-        val_results_dst = DST_DIR / f"perceptron_{dataset_name}_val_results.csv"
-        val_summary_dst = DST_DIR / f"perceptron_{dataset_name}_val_summary.csv"
+            # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+            # Organize and save output
+            history = pd.concat(history)
+            names = ["x_col_pos", "y_row_pos", "x_col_vel", "y_row_vel", "x_col_acc", "y_row_acc"]
+            mix = pd.MultiIndex.from_tuples(history.index.values, names=names)
+            history.index = mix
 
-        te_results.to_csv(te_results_dst, index=False)
-        val_results.to_csv(val_results_dst, index=False)
-        val_summary.to_csv(val_summary_dst)
+            state_actions_dst = OUT_DIR / f"sarsa_state_actions_{track_src.stem}_{oob_penalty}.csv"
+            history_dst = OUT_DIR / f"sarsa_history_{track_src.stem}_{oob_penalty}.csv"
+            state_actions.to_csv(state_actions_dst)
+            history.to_csv(history_dst)
 
 
 if __name__ == "__main__":
-    test_regression_perceptron()
+    test_sarsa()
