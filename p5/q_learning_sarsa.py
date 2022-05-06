@@ -10,7 +10,7 @@ import pandas as pd
 
 # Local imports
 from p5.track import Track
-from p5.settings import EPSILON
+from p5.settings import EPSILON, MIN_TEMP
 from p5.utils import bresenham
 
 
@@ -52,14 +52,15 @@ def compute_position(pos_0: tuple, vel_1: tuple, track: Track) -> tuple:
     return x_col_pos_1, y_row_pos_1
 
 
-def compute_temp(temp: float, dissipation_frac: float = 0.999) -> float:
+def compute_temp(temp: float, dissipation_frac: float = 0.999, min_temp=MIN_TEMP) -> float:
     """
     Compute temperature decrease resulting from heat loss.
     :param temp: Temperature at time t
     :param dissipation_frac: Temperature decrease over one time step
     :return: Temperature at time t + 1
     """
-    return temp * dissipation_frac
+    new_temp = temp * dissipation_frac
+    return new_temp if new_temp > min_temp else min_temp
 
 
 def epsilon_greedy_policy(pos_0: tuple, vel_0: tuple, state_actions: pd.DataFrame, epsilon: float = EPSILON) -> tuple:
@@ -82,7 +83,18 @@ def epsilon_greedy_policy(pos_0: tuple, vel_0: tuple, state_actions: pd.DataFram
     return action["x_col_acc"], action["y_row_acc"]
 
 
-def is_terminal(q: float) -> bool:
+def is_terminal(pos: tuple, vel: tuple, state_actions: pd.DataFrame) -> bool:
+    """
+    Determine if Q corresponds to terminal state.
+    :param pos: x-y position pair
+    :param vel: x-y velocity pair
+    :param state_actions: Table of state-action pairs
+    :return: True if state is terminal
+    """
+    return state_actions.loc[pos[0], pos[1], vel[0], vel[1]].iloc[0].space == "F"
+
+
+def is_terminal_q(q: float) -> bool:
     """
     Determine if Q corresponds to terminal state.
     :param q: Q value
@@ -139,18 +151,21 @@ def state_action_dict(pos: tuple, vel: tuple, acc: tuple, state_actions: pd.Data
     return state_actions.loc[pos[0]].loc[pos[1]].loc[vel[0]].loc[vel[1]].loc[acc[0]].loc[acc[1]].to_dict()
 
 
-def update_state_actions(new_q, pos: tuple, vel: tuple, acc: tuple, state_actions: pd.DataFrame) -> pd.DataFrame:
+def update_state_actions(new_q, pos: tuple, vel: tuple, acc: tuple, episode: int,
+                         state_actions: pd.DataFrame) -> pd.DataFrame:
     """
     Update Q value of state actions table.
     :param new_q: New Q value
     :param pos: x-y position pair
     :param vel: x-y velocity pair
     :param acc: x-y acceleration pair
+    :param episode: Episode of run
     :param state_actions: State-actions table
     :return: Updated state-actions table
     """
     row = state_actions.loc[pos[0], pos[1], vel[0], vel[1], acc[0], acc[1]]
     row.loc["q"] = new_q
     row.loc["t"] = row.loc["t"] + 1
+    row.loc["ep"] = episode
     state_actions.loc[pos[0], pos[1], vel[0], vel[1], acc[0], acc[1]] = row.values
     return state_actions

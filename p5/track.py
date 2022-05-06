@@ -85,7 +85,7 @@ class Track:
         self.states = states
         return self.states
 
-    def make_state_actions(self) -> pd.DataFrame:
+    def make_state_actions(self, init_val: int = -1) -> pd.DataFrame:
         """
         Make state-action pairs.
         :return: State-actions table
@@ -100,18 +100,18 @@ class Track:
                             for action in ACTIONS:
                                 x_col_acc, y_row_acc = action
                                 r = 0 if space == "F" else -1
-                                q = 0 if space == "F" else -10
+                                q = 0 if space == "F" else init_val
                                 fin = True if space == "F" else False
                                 state_action = dict(space=space, y_row_pos=y_row_pos, x_col_pos=x_col_pos,
                                                     y_row_vel=y_row_vel, x_col_vel=x_col_vel, x_col_acc=x_col_acc,
-                                                    y_row_acc=y_row_acc, r=r, fin=fin, q=0, t=0)
+                                                    y_row_acc=y_row_acc, r=r, fin=fin, q=q, t=0, ep=-1)
                                 state_actions.append(state_action)
         state_actions = pd.DataFrame(state_actions)
         index = ["x_col_pos", "y_row_pos", "x_col_vel", "y_row_vel", "x_col_acc", "y_row_acc"]
         self.state_actions = state_actions.set_index(index)
         return self.state_actions
 
-    def sort_state_actions(self) -> pd.DataFrame:
+    def sort_states(self) -> pd.DataFrame:
         """
         Sort state-action pairs on the basis of nearness to finish squares.
         :return: Updated state-actions table
