@@ -58,10 +58,11 @@ def test_q_learning():
             # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             # Train over episodes
             history = []
-            n_unvisited = (track.state_actions.t == 0).sum()
+            n_unvisited = len(track.state_actions)
+            frac_unvisited = 1
             episode = 0
             ct = 0
-            while n_unvisited > 0:
+            while frac_unvisited > 0:
                 episode += 1
                 print(f"Episode {episode}")
 
@@ -120,13 +121,14 @@ def test_q_learning():
                     # Print status
                     t = track.state_actions.loc[pos[0], pos[1], vel[0], vel[1], acc[0], acc[1]].loc["t"]
                     print(
-                        f"\tct={ct}, t={t}, n_un={n_unvisited}, pos={pos}, vel={vel}, acc={acc}, temp={temp:.1f}, q={q:.2f}, new_q={new_q:.2f}")
+                        f"\tct={ct}, t={t}, frac_un={frac_unvisited:.4f}, n_un={n_unvisited}, pos={pos}, vel={vel}, acc={acc}, temp={temp:.1f}, q={q:.2f}, new_q={new_q:.2f}")
 
                     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                     # Update state
                     pos, vel = pos_prime, vel_prime
 
                     n_unvisited = (track.state_actions.t == 0).sum()
+                    frac_unvisited = n_unvisited / len(track.state_actions)
 
             # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             # Organize and save output
