@@ -144,7 +144,7 @@ def test_sarsa():
                     vel = vel_prime
                     pos = pos_prime
 
-                n_unvisited = (track.state_actions.t == 0).sum()
+                    n_unvisited = (track.state_actions.t == 0).sum()
 
             # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             # Organize and save output

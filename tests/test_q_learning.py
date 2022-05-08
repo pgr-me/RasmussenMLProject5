@@ -126,7 +126,7 @@ def test_q_learning():
                     # Update state
                     pos, vel = pos_prime, vel_prime
 
-                n_unvisited = (track.state_actions.t == 0).sum()
+                    n_unvisited = (track.state_actions.t == 0).sum()
 
             # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             # Organize and save output
