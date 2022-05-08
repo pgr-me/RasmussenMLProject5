@@ -57,6 +57,7 @@ def compute_temp(temp: float, dissipation_frac: float = 0.999, min_temp=MIN_TEMP
     Compute temperature decrease resulting from heat loss.
     :param temp: Temperature at time t
     :param dissipation_frac: Temperature decrease over one time step
+    :param min_temp: Minimum allowable temperature
     :return: Temperature at time t + 1
     """
     new_temp = temp * dissipation_frac

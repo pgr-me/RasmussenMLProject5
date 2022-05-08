@@ -11,8 +11,8 @@ import pandas as pd
 
 # Local imports
 from p5.settings import *
-from p5.q_learning_sarsa import epsilon_greedy_policy, compute_position, compute_temp, is_terminal, is_terminal_q, \
-    select_s_prime_index, softmax_policy, state_action_dict, update_state_actions
+from p5.q_learning_sarsa import epsilon_greedy_policy, compute_position, compute_temp, is_terminal, softmax_policy,\
+    state_action_dict, update_state_actions
 from p5.track import Track
 from p5.utils import compute_velocity, realize_action
 
@@ -29,7 +29,7 @@ THRESH = 0.01
 K_FOLDS = 5
 VAL_FRAC = 0.2
 
-track_srcs = [x for x in IN_DIR.iterdir() if x.stem == "toy-track"]
+track_srcs = [x for x in IN_DIR.iterdir() if x.stem == "demo-track"]
 OOB_PENALTIES = ["stay-in-place", "back-to-beginning"]
 # Select policy
 policy = softmax_policy
@@ -57,15 +57,15 @@ def test_q_learning():
 
             # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             # Train over episodes
-            ix_check = 5 * [None]
             history = []
             n_unvisited = (track.state_actions.t == 0).sum()
             episode = 0
             ct = 0
             while n_unvisited > 0:
                 episode += 1
-
                 print(f"Episode {episode}")
+
+                # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                 # Initialize state
                 track.sort_states()
                 ix = track.states.index.values[0]
@@ -80,6 +80,7 @@ def test_q_learning():
 
                     track.state_actions.sort_values(by="q", ascending=False, inplace=True)
 
+                    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                     # Apply policy to get action
                     if policy == softmax_policy:
                         acc = softmax_policy(pos, vel, track.state_actions, temp)
@@ -89,34 +90,39 @@ def test_q_learning():
                     q = state_action_di["q"]
                     r = state_action_di["r"]
 
+                    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                     # Find Q of s prime-a prime pair
                     acc_real = realize_action(acc)
                     vel_prime = compute_velocity(vel, acc_real)
                     pos_prime = compute_position(pos, vel_prime, track)
+
+                    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                     # Choose action that maximizes Q for state s'
                     acc_prime = track.state_actions.loc[pos_prime[0], pos_prime[1], vel_prime[0], vel_prime[1]] \
                         .sort_values(by="q", ascending=False).iloc[0].name
                     state_action_prime_di = state_action_dict(pos_prime, vel_prime, acc_prime, track.state_actions)
                     q_prime = state_action_prime_di["q"]
 
+                    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                     # Compute new Q
                     new_q = q + ETA * (r + GAMMA * q_prime - q)  # Keep ETA constant
                     assert new_q <= 0
                     track.state_actions = update_state_actions(new_q, pos, vel, acc, episode, track.state_actions)
 
+                    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                     # Update temperature and append to history
-                    ix_check.append(ix)
-                    ix_check = ix_check[-5:]
                     temp = compute_temp(temp, dissipation_frac=TEMP_DISSIPATION_FRAC, min_temp=MIN_TEMP)
                     frame = track.state_actions.loc[
                         pos[0], pos[1], vel[0], vel[1], acc[0], acc[1]].to_frame().transpose()
                     history.append(frame)
 
+                    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                     # Print status
                     t = track.state_actions.loc[pos[0], pos[1], vel[0], vel[1], acc[0], acc[1]].loc["t"]
                     print(
-                        f"\tct={ct}, t={t}, pos={pos}, vel={vel}, acc={acc}, temp={temp:.1f}, q={q:.2f}, new_q={new_q:.2f}")
+                        f"\tct={ct}, t={t}, n_un={n_unvisited}, pos={pos}, vel={vel}, acc={acc}, temp={temp:.1f}, q={q:.2f}, new_q={new_q:.2f}")
 
+                    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                     # Update state
                     pos, vel = pos_prime, vel_prime
 

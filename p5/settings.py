@@ -1,6 +1,9 @@
-# Third party imports
-import numpy as np
+#!/usr/bin/env python3
+"""Peter Rasmussen, Programming Assignment 5, settings.py
 
+This module provides constants used by the program.
+
+"""
 # Acceleration parameters
 ACCELERATION = [-1, 0, 1]
 ACTIONS = [[x_col_acc, y_row_acc] for x_col_acc in [-1, 0, 1] for y_row_acc in [-1, 0, 1]]
