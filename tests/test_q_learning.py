@@ -131,7 +131,7 @@ def test_q_learning():
 
                     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                     # Save intermediate outputs
-                    if ct % 50 == 0:
+                    if ct % 50000 == 0:
                         state_actions_dst = OUT_DIR / f"q_learning_state_actions_{track_src.stem}_{oob_penalty}_{ct}.csv"
                         history_dst = OUT_DIR / f"q_learning_history_{track_src.stem}_{oob_penalty}_{ct}.csv"
                         track.state_actions.to_csv(state_actions_dst)
