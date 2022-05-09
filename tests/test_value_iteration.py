@@ -53,7 +53,7 @@ def test_value_iteration():
 
             # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             # Train over episodes
-            for episode in range(20):
+            for episode in range(100):
                 states["t"] = states["t"] + 1
 
                 # Learn the states
@@ -73,10 +73,17 @@ def test_value_iteration():
                 if max_diff <= VALUE_ITERATION_TERMINATION_THRESHOLD:
                     break
 
+                if episode % 10 == 0:
+                    # Save intermediate outputs
+                    states_dst = OUT_DIR / f"value_iter_states_{track_src.stem}_{oob_penalty}_{episode}.csv"
+                    learning_curve_dst = OUT_DIR / f"value_iter_learning_curve_{track_src.stem}_{oob_penalty}_{episode}.csv"
+                    states.to_csv(states_dst, index=False)
+                    pd.DataFrame(learning_curve).to_csv(learning_curve_dst, index=False)
+
             # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             # Save output
-            states_dst = OUT_DIR / f"value_iteration_states_{track_src.stem}_{oob_penalty}.csv"
-            learning_curve_dst = OUT_DIR / f"value_iteration_learning_curve_{track_src.stem}_{oob_penalty}.csv"
+            states_dst = OUT_DIR / f"value_iter_states_{track_src.stem}_{oob_penalty}.csv"
+            learning_curve_dst = OUT_DIR / f"value_iter_learning_curve_{track_src.stem}_{oob_penalty}.csv"
             states.to_csv(states_dst, index=False)
             pd.DataFrame(learning_curve).to_csv(learning_curve_dst, index=False)
 
