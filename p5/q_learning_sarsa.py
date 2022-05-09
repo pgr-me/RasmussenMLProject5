@@ -79,7 +79,7 @@ def epsilon_greedy_policy(pos_0: tuple, vel_0: tuple, state_actions: pd.DataFram
     x_col_vel_0, y_row_vel_0 = vel_0
 
     actions = state_actions.loc[x_col_pos_0].loc[y_row_pos_0].loc[x_col_vel_0].loc[y_row_vel_0].reset_index()
-    exploit_action = actions.iloc[0].to_dict()
+    exploit_action = actions.sort_values(by="q", ascending=False).iloc[0].to_dict()
     explore_action = actions.sample(n=1).iloc[0].to_dict()
     # Select action: Explore or exploit
     action = exploit_action if np.random.random() > epsilon else explore_action
@@ -146,7 +146,7 @@ def softmax_policy(pos_0: tuple, vel_0: tuple, state_actions: pd.DataFrame, temp
     x_col_vel_0, y_row_vel_0 = vel_0
 
     actions = state_actions.loc[x_col_pos_0].loc[y_row_pos_0].loc[x_col_vel_0].loc[y_row_vel_0].reset_index()
-    numerator = np.exp(actions["q"].abs() / temp)
+    numerator = np.exp(actions["q"] / temp)
     denominator = numerator.sum()
     actions["cum_probs"] = (numerator / denominator).cumsum()
 

@@ -162,6 +162,7 @@ class Track:
         Sort state-action pairs on the basis of nearness to finish squares.
         :return: Updated state-actions table
         """
+        self.states = self.states.sample(frac=1)
         self.states.sort_values(by=["fin", "t", "order"], ascending=[True, True, True], inplace=True)
         return self.states
 
