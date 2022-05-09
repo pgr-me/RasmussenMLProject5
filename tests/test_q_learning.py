@@ -11,8 +11,8 @@ import pandas as pd
 
 # Local imports
 from p5.settings import *
-from p5.q_learning_sarsa import epsilon_greedy_policy, compute_position, compute_temp, is_terminal, softmax_policy,\
-    state_action_dict, update_state_actions
+from p5.q_learning_sarsa import epsilon_greedy_policy, compute_position, compute_temp, is_terminal, save_history, \
+    softmax_policy, state_action_dict, update_state_actions
 from p5.track import Track
 from p5.utils import compute_velocity, realize_action
 
@@ -51,12 +51,12 @@ def test_q_learning():
             track.prep_track()
             track.make_states()
             track.make_state_actions()
+            track.make_order()
             track.sort_states()
-            # Choose action using policy derived from Q
-            temp = INIT_TEMP
 
             # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             # Train over episodes
+            temp = INIT_TEMP
             history = []
             n_unvisited = len(track.state_actions)
             frac_unvisited = 1
@@ -82,31 +82,31 @@ def test_q_learning():
                     track.state_actions.sort_values(by="q", ascending=False, inplace=True)
 
                     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-                    # Apply policy to get action
+                    # Choose action using policy
                     if policy == softmax_policy:
                         acc = softmax_policy(pos, vel, track.state_actions, temp)
                     else:
                         acc = epsilon_greedy_policy(pos, vel, track.state_actions, epsilon=EPSILON)
                     state_action_di = state_action_dict(pos, vel, acc, track.state_actions)
                     q = state_action_di["q"]
-                    r = state_action_di["r"]
 
                     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-                    # Find Q of s prime-a prime pair
+                    # Take action and observe r and s'
                     acc_real = realize_action(acc)
                     vel_prime = compute_velocity(vel, acc_real)
                     pos_prime = compute_position(pos, vel_prime, track)
+                    r = track.get_reward(pos_prime)
 
                     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                     # Choose action that maximizes Q for state s'
                     acc_prime = track.state_actions.loc[pos_prime[0], pos_prime[1], vel_prime[0], vel_prime[1]] \
                         .sort_values(by="q", ascending=False).iloc[0].name
                     state_action_prime_di = state_action_dict(pos_prime, vel_prime, acc_prime, track.state_actions)
-                    q_prime = state_action_prime_di["q"]
+                    q_prime_max = state_action_prime_di["q"]
 
                     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                     # Compute new Q
-                    new_q = q + ETA * (r + GAMMA * q_prime - q)  # Keep ETA constant
+                    new_q = q + ETA * (r + GAMMA * q_prime_max - q)  # Keep ETA constant
                     assert new_q <= 0
                     track.state_actions = update_state_actions(new_q, pos, vel, acc, episode, track.state_actions)
 
@@ -124,23 +124,25 @@ def test_q_learning():
                         f"\tct={ct}, t={t}, frac_un={frac_unvisited:.4f}, n_un={n_unvisited}, pos={pos}, vel={vel}, acc={acc}, temp={temp:.1f}, q={q:.2f}, new_q={new_q:.2f}")
 
                     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-                    # Update state
+                    # Update state and fraction of unvisited state-action pairs
                     pos, vel = pos_prime, vel_prime
-
                     n_unvisited = (track.state_actions.t == 0).sum()
                     frac_unvisited = n_unvisited / len(track.state_actions)
 
-            # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-            # Organize and save output
-            history = pd.concat(history)
-            names = ["x_col_pos", "y_row_pos", "x_col_vel", "y_row_vel", "x_col_acc", "y_row_acc"]
-            mix = pd.MultiIndex.from_tuples(history.index.values, names=names)
-            history.index = mix
+                    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                    # Save intermediate outputs
+                    if ct % 50 == 0:
+                        state_actions_dst = OUT_DIR / f"q_learning_state_actions_{track_src.stem}_{oob_penalty}_{ct}.csv"
+                        history_dst = OUT_DIR / f"q_learning_history_{track_src.stem}_{oob_penalty}_{ct}.csv"
+                        track.state_actions.to_csv(state_actions_dst)
+                        save_history(history, history_dst)
 
+            # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+            # Organize and save final output
             state_actions_dst = OUT_DIR / f"q_learning_state_actions_{track_src.stem}_{oob_penalty}.csv"
             history_dst = OUT_DIR / f"q_learning_history_{track_src.stem}_{oob_penalty}.csv"
             track.state_actions.to_csv(state_actions_dst)
-            history.to_csv(history_dst)
+            save_history(history, history_dst)
 
 
 if __name__ == "__main__":

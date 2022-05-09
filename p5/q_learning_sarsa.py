@@ -4,6 +4,9 @@
 This module provides the functions used for Q-learning and SARSA.
 
 """
+# Standard library imports
+from pathlib import Path
+
 # Third party imports
 import numpy as np
 import pandas as pd
@@ -102,6 +105,19 @@ def is_terminal_q(q: float) -> bool:
     :return: True if Q is in a terminal state
     """
     return q == 0
+
+
+def save_history(history: list, dst: Path):
+    """
+    Save history to disk.
+    :param history: List of dataframes to concatenate
+    :param dst: Path to CSV
+    """
+    history_df = pd.concat(history)
+    names = ["x_col_pos", "y_row_pos", "x_col_vel", "y_row_vel", "x_col_acc", "y_row_acc"]
+    mix = pd.MultiIndex.from_tuples(history_df.index.values, names=names)
+    history_df.index = mix
+    history_df.to_csv(dst)
 
 
 def select_s_prime_index(pos_prime: tuple, vel_prime: tuple, states: pd.DataFrame) -> int:
