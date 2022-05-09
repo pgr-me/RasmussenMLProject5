@@ -12,7 +12,7 @@ import pandas as pd
 # Local imports
 from p5.settings import *
 from p5.q_learning_sarsa import compute_position, compute_temp, epsilon_greedy_policy, is_terminal, save_history, \
-    softmax_policy, state_action_dict, update_state_actions
+    softmax_policy, state_action_dict, update_state_actions, update_states
 from p5.track import Track
 from p5.utils import compute_velocity, realize_action
 
@@ -129,6 +129,7 @@ def test_sarsa():
                     new_q = q + ETA * (r + GAMMA * q_prime - q)
                     assert new_q <= 0
                     track.state_actions = update_state_actions(new_q, pos, vel, acc, episode, track.state_actions)
+                    track.states = update_states(track.states, track.state_actions)
 
                     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                     # Update temperature and append to history

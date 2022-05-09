@@ -186,3 +186,14 @@ def update_state_actions(new_q, pos: tuple, vel: tuple, acc: tuple, episode: int
     row.loc["ep"] = episode
     state_actions.loc[pos[0], pos[1], vel[0], vel[1], acc[0], acc[1]] = row.values
     return state_actions
+
+
+def update_states(states: pd.DataFrame, state_actions: pd.DataFrame)->pd.DataFrame:
+    """
+
+    :param states:
+    :return:
+    """
+    g = ["x_col_pos", "y_row_pos", "x_col_vel", "y_row_vel"]
+    group = state_actions.groupby(g)["t"].sum().reset_index()
+    return states.drop(axis=1, labels="t").merge(group, on=g, how="left")
