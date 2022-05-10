@@ -34,21 +34,9 @@ parser.add_argument(
 parser.add_argument(
     "--dst_dir", "-o", type=Path, help="Output directory"
 )
-parser.add_argument(
-    "--k_folds", "-k", default=5, type=int, help="Number of folds to partition data"
-)
-parser.add_argument(
-    "--val_frac", "-v", default=0.1, type=float, help="Fraction of validation samples"
-)
-parser.add_argument(
-    "--random_state", "-r", default=777, type=int, help="Pseudo-random seed"
-)
 args = parser.parse_args()
 
 run(
     args.src_dir,
     args.dst_dir,
-    args.k_folds,
-    args.val_frac,
-    args.random_state
 )

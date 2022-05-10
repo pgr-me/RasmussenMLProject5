@@ -4,13 +4,11 @@
 """
 # Standard library imports
 from pathlib import Path
+import typing as t
 import warnings
 
-# Third party imports
-import pandas as pd
-
 # Local imports
-from p5.settings import *
+from p5.settings import EPSILON, ETA, GAMMA, INIT_TEMP, MIN_TEMP, OOB_PENALTIES, TEMP_DISSIPATION_FRAC, VELOCITIES
 from p5.q_learning_sarsa import epsilon_greedy_policy, compute_position, compute_temp, is_terminal, save_history, \
     softmax_policy, state_action_dict, update_state_actions, update_states
 from p5.track import Track
@@ -18,29 +16,17 @@ from p5.utils import compute_velocity, realize_action
 
 warnings.filterwarnings('ignore')
 
-# Define constants
-TEST_DIR = Path("").absolute()
-REPO_DIR = TEST_DIR.parent
-P4_DIR = REPO_DIR / "p5"
-DATA_DIR = REPO_DIR / "data"
-IN_DIR = DATA_DIR / "in"
-OUT_DIR = DATA_DIR / "out"
-THRESH = 0.01
-K_FOLDS = 5
-VAL_FRAC = 0.2
 
-track_srcs = [x for x in IN_DIR.iterdir() if x.stem == "demo-track"]
-OOB_PENALTIES = ["stay-in-place", "back-to-beginning"]
-# Select policy
-policy = softmax_policy
-
-
-def run_q_learning():
+def run_q_learning(src_dir: Path, dst_dir: Path, policy: t.Callable = softmax_policy):
     """
-    Test value iteration algorithm.
+    Run Q learning algorithm for provided input track files.
+    :param src_dir: Path to source / input directory containing track files
+    :param dst_dir: Path to destination / output directory
+    :param policy: Softmax or greedy epsilon
     """
-    # Iterate over each dataset
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Iterate over each dataset
+    track_srcs = [x for x in src_dir.iterdir()]
     for track_src in track_srcs:
         for oob_penalty in OOB_PENALTIES:
             print(track_src.stem)
@@ -49,8 +35,8 @@ def run_q_learning():
             # Make the track and possible states
             track = Track(track_src)
             track.prep_track()
-            track.make_states()
-            track.make_state_actions()
+            track.make_states(velocities=VELOCITIES)
+            track.make_state_actions(velocities=VELOCITIES)
             track.make_order()
             track.sort_states()
 
@@ -133,18 +119,14 @@ def run_q_learning():
                     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                     # Save intermediate outputs
                     if ct % 50000 == 0:
-                        state_actions_dst = OUT_DIR / f"q_learning_state_actions_{track_src.stem}_{oob_penalty}_{ct}.csv"
-                        history_dst = OUT_DIR / f"q_learning_history_{track_src.stem}_{oob_penalty}_{ct}.csv"
+                        state_actions_dst = dst_dir / f"q_learning_state_actions_{track_src.stem}_{oob_penalty}_{ct}.csv"
+                        history_dst = dst_dir / f"q_learning_history_{track_src.stem}_{oob_penalty}_{ct}.csv"
                         track.state_actions.to_csv(state_actions_dst)
                         save_history(history, history_dst)
 
             # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             # Organize and save final output
-            state_actions_dst = OUT_DIR / f"q_learning_state_actions_{track_src.stem}_{oob_penalty}.csv"
-            history_dst = OUT_DIR / f"q_learning_history_{track_src.stem}_{oob_penalty}.csv"
+            state_actions_dst = dst_dir / f"q_learning_state_actions_{track_src.stem}_{oob_penalty}.csv"
+            history_dst = dst_dir / f"q_learning_history_{track_src.stem}_{oob_penalty}.csv"
             track.state_actions.to_csv(state_actions_dst)
             save_history(history, history_dst)
-
-
-if __name__ == "__main__":
-    run_q_learning()

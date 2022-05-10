@@ -29,8 +29,9 @@ THRESH = 0.01
 K_FOLDS = 5
 VAL_FRAC = 0.2
 
-track_srcs = [x for x in IN_DIR.iterdir() if x.stem == "R-track"]
+track_srcs = [x for x in IN_DIR.iterdir() if x.stem == "demo-track"]
 OOB_PENALTIES = ["stay-in-place", "back-to-beginning"]
+VELOCITIES = [-1, 0, 1]
 # Select policy
 policy = softmax_policy
 
@@ -53,8 +54,8 @@ def test_sarsa():
             # Make the track and possible states
             track = Track(track_src)
             track.prep_track()
-            track.make_states()
-            track.make_state_actions()
+            track.make_states(velocities=VELOCITIES)
+            track.make_state_actions(velocities=VELOCITIES)
             track.make_order()
             track.sort_states()
 

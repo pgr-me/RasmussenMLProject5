@@ -27,8 +27,8 @@ OUT_DIR = DATA_DIR / "out"
 THRESH = 0.01
 K_FOLDS = 5
 VAL_FRAC = 0.2
-
-track_srcs = [x for x in IN_DIR.iterdir() if x.stem == "toy-track"]
+VELOCITIES = [-1, 0, 1]
+track_srcs = [x for x in IN_DIR.iterdir() if x.stem == "demo-track"]
 OOB_PENALTIES = ["stay-in-place", "back-to-beginning"]
 
 
@@ -46,7 +46,7 @@ def test_value_iteration():
             # Make the track and possible states
             track = Track(track_src)
             track.prep_track()
-            track.make_states()
+            track.make_states(velocities=VELOCITIES)
             states = track.states.copy()
             indices = track.states.index.values
             learning_curve = []

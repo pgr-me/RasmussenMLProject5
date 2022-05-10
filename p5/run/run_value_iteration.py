@@ -11,31 +11,20 @@ import warnings
 import pandas as pd
 
 # Local imports
-from p5.settings import *
+from p5.settings import N_CORES, OOB_PENALTIES, VALUE_ITERATION_TERMINATION_THRESHOLD, VELOCITIES
 from p5.value_iteration import learn_state
 from p5.track import Track
 
 warnings.filterwarnings('ignore')
 
-# Define constants
-TEST_DIR = Path("").absolute()
-REPO_DIR = TEST_DIR.parent
-P4_DIR = REPO_DIR / "p5"
-DATA_DIR = REPO_DIR / "data"
-IN_DIR = DATA_DIR / "in"
-OUT_DIR = DATA_DIR / "out"
-THRESH = 0.01
-K_FOLDS = 5
-VAL_FRAC = 0.2
 
-track_srcs = [x for x in IN_DIR.iterdir() if x.stem == "toy-track"]
-OOB_PENALTIES = ["stay-in-place", "back-to-beginning"]
-
-
-def run_value_iteration():
+def run_value_iteration(src_dir: Path, dst_dir: Path):
     """
     Test value iteration algorithm.
+    :param src_dir: Path to source / input directory containing track files
+    :param dst_dir: Path to destination / output directory
     """
+    track_srcs = [x for x in src_dir.iterdir() if x.stem == "toy-track"]
     # Iterate over each dataset
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     for track_src in track_srcs:
@@ -46,7 +35,7 @@ def run_value_iteration():
             # Make the track and possible states
             track = Track(track_src)
             track.prep_track()
-            track.make_states()
+            track.make_states(velocities=VELOCITIES)
             states = track.states.copy()
             indices = track.states.index.values
             learning_curve = []
@@ -75,18 +64,14 @@ def run_value_iteration():
 
                 if episode % 10 == 0:
                     # Save intermediate outputs
-                    states_dst = OUT_DIR / f"value_iter_states_{track_src.stem}_{oob_penalty}_{episode}.csv"
-                    learning_curve_dst = OUT_DIR / f"value_iter_learning_curve_{track_src.stem}_{oob_penalty}_{episode}.csv"
+                    states_dst = dst_dir / f"value_iter_states_{track_src.stem}_{oob_penalty}_{episode}.csv"
+                    learning_curve_dst = dst_dir / f"value_iter_learning_curve_{track_src.stem}_{oob_penalty}_{episode}.csv"
                     states.to_csv(states_dst, index=False)
                     pd.DataFrame(learning_curve).to_csv(learning_curve_dst, index=False)
 
             # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             # Save output
-            states_dst = OUT_DIR / f"value_iter_states_{track_src.stem}_{oob_penalty}.csv"
-            learning_curve_dst = OUT_DIR / f"value_iter_learning_curve_{track_src.stem}_{oob_penalty}.csv"
+            states_dst = dst_dir / f"value_iter_states_{track_src.stem}_{oob_penalty}.csv"
+            learning_curve_dst = dst_dir / f"value_iter_learning_curve_{track_src.stem}_{oob_penalty}.csv"
             states.to_csv(states_dst, index=False)
             pd.DataFrame(learning_curve).to_csv(learning_curve_dst, index=False)
-
-
-if __name__ == "__main__":
-    run_value_iteration()

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Peter Rasmussen, Programming Assignment 5, track.py
 
-This module provides the Track class, which builds out the track and all states.
+This module provides the Track class, which builds out the track, all states, and state-action pairs.
 
 """
 # Standard library imports
@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 
 # Local imports
-from p5.settings import ACTIONS, INIT_VAL, VELOCITIES
+from p5.settings import ACTIONS, INIT_VAL
 from p5.utils import minkowski_distance
 
 
@@ -42,22 +42,12 @@ class Track:
     def __repr__(self):
         return self.track.head().to_string()
 
-    def prep_track(self):
+    def find_nearest(self, dst_cells: list) -> list:
         """
-        Prepare the track for use.
+        Find the nearest cell to the given set of cells.
+        :param dst_cells: Cells to find other nearest cells to
+        :return: Nearest cells
         """
-        for y_row_ix, row in self.track.iterrows():
-            for x_col_ix, val in row.iteritems():
-                if val == "F":
-                    self.finish_cells.add((x_col_ix, y_row_ix))
-                elif val == "S":
-                    self.start_cells.add((x_col_ix, y_row_ix))
-                elif val == "#":
-                    self.wall_cells.add((x_col_ix, y_row_ix))
-                else:
-                    self.go_cells.add((x_col_ix, y_row_ix))
-
-    def find_nearest(self, dst_cells: list):
         nearest = []
         temp = self.positions.copy()
         for dst_cell in dst_cells:
@@ -76,54 +66,6 @@ class Track:
         :return: Corresponding reward
         """
         return 0 if pos in self.finish_cells else -1
-
-    def make_state_actions(self, init_val: int = -1) -> pd.DataFrame:
-        """
-        Make state-action pairs.
-        :return: State-actions table
-        For use with Q learning and SARSA.
-        """
-        state_actions = []
-        for y_row_pos, row in self.track.iterrows():
-            for x_col_pos, space in row.to_dict().items():
-                if space != "#":
-                    for y_row_vel in VELOCITIES:
-                        for x_col_vel in VELOCITIES:
-                            for action in ACTIONS:
-                                x_col_acc, y_row_acc = action
-                                r = 0 if space == "F" else -1
-                                q = 0 if space == "F" else init_val
-                                fin = True if space == "F" else False
-                                state_action = dict(space=space, y_row_pos=y_row_pos, x_col_pos=x_col_pos,
-                                                    y_row_vel=y_row_vel, x_col_vel=x_col_vel, x_col_acc=x_col_acc,
-                                                    y_row_acc=y_row_acc, r=r, fin=fin, q=q, t=0, ep=-1)
-                                state_actions.append(state_action)
-        state_actions = pd.DataFrame(state_actions)
-        index = ["x_col_pos", "y_row_pos", "x_col_vel", "y_row_vel", "x_col_acc", "y_row_acc"]
-        self.state_actions = state_actions.set_index(index)
-        return self.state_actions
-
-    def make_states(self) -> pd.DataFrame:
-        """
-        Make states for value iteration algorithm.
-        :return: States table
-        """
-        states = []
-        for y_row_pos, row in self.track.iterrows():
-            for x_col_pos, space in row.to_dict().items():
-                if space != "#":
-                    for y_row_vel in VELOCITIES:
-                        for x_col_vel in VELOCITIES:
-                            r = 0 if space == "F" else -1
-                            val = 0 if space == "F" else INIT_VAL
-                            fin = True if space == "F" else False
-                            state = dict(space=space, y_row_pos=y_row_pos, x_col_pos=x_col_pos, y_row_vel=y_row_vel,
-                                         x_col_vel=x_col_vel, r=r, fin=fin, prev_val=0, val=val, t=0,
-                                         best_x_col_a=np.nan, best_y_row_a=np.nan)
-                            states.append(state)
-        states = pd.DataFrame(states)
-        self.states = states
-        return self.states
 
     def make_order(self):
         """
@@ -156,6 +98,72 @@ class Track:
             self.order.loc[y_row_pos].loc[x_col_pos] = row.order
         on = ["x_col_pos", "y_row_pos"]
         self.states = self.states.merge(self.positions.reset_index().drop(axis=1, labels="space"), on=on, how="left")
+
+    def make_state_actions(self, velocities: list, init_val: int = -1) -> pd.DataFrame:
+        """
+        Make state-action pairs.
+        :param velocities: List of allowable velocities
+        :param init_val: Initial Q value
+        :return: State-actions table
+        For use with Q learning and SARSA.
+        """
+        state_actions = []
+        for y_row_pos, row in self.track.iterrows():
+            for x_col_pos, space in row.to_dict().items():
+                if space != "#":
+                    for y_row_vel in velocities:
+                        for x_col_vel in velocities:
+                            for action in ACTIONS:
+                                x_col_acc, y_row_acc = action
+                                r = 0 if space == "F" else -1
+                                q = 0 if space == "F" else init_val
+                                fin = True if space == "F" else False
+                                state_action = dict(space=space, y_row_pos=y_row_pos, x_col_pos=x_col_pos,
+                                                    y_row_vel=y_row_vel, x_col_vel=x_col_vel, x_col_acc=x_col_acc,
+                                                    y_row_acc=y_row_acc, r=r, fin=fin, q=q, t=0, ep=-1)
+                                state_actions.append(state_action)
+        state_actions = pd.DataFrame(state_actions)
+        index = ["x_col_pos", "y_row_pos", "x_col_vel", "y_row_vel", "x_col_acc", "y_row_acc"]
+        self.state_actions = state_actions.set_index(index)
+        return self.state_actions
+
+    def make_states(self, velocities: list) -> pd.DataFrame:
+        """
+        Make states for value iteration algorithm.
+        :param velocities: List of allowable velocities
+        :return: States table
+        """
+        states = []
+        for y_row_pos, row in self.track.iterrows():
+            for x_col_pos, space in row.to_dict().items():
+                if space != "#":
+                    for y_row_vel in velocities:
+                        for x_col_vel in velocities:
+                            r = 0 if space == "F" else -1
+                            val = 0 if space == "F" else INIT_VAL
+                            fin = True if space == "F" else False
+                            state = dict(space=space, y_row_pos=y_row_pos, x_col_pos=x_col_pos, y_row_vel=y_row_vel,
+                                         x_col_vel=x_col_vel, r=r, fin=fin, prev_val=0, val=val, t=0,
+                                         best_x_col_a=np.nan, best_y_row_a=np.nan)
+                            states.append(state)
+        states = pd.DataFrame(states)
+        self.states = states
+        return self.states
+
+    def prep_track(self):
+        """
+        Prepare the track for use.
+        """
+        for y_row_ix, row in self.track.iterrows():
+            for x_col_ix, val in row.iteritems():
+                if val == "F":
+                    self.finish_cells.add((x_col_ix, y_row_ix))
+                elif val == "S":
+                    self.start_cells.add((x_col_ix, y_row_ix))
+                elif val == "#":
+                    self.wall_cells.add((x_col_ix, y_row_ix))
+                else:
+                    self.go_cells.add((x_col_ix, y_row_ix))
 
     def sort_states(self) -> pd.DataFrame:
         """
