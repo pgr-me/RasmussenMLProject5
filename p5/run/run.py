@@ -18,25 +18,17 @@ import numpy as np
 import pandas as pd
 
 # Local imports
-from p5.q_learning_old import Preprocessor, get_standardization_cols, get_standardization_params, standardize
-from p5.q_learning_old.split import make_splits
+from p5.run import run_q_learning, run_sarsa, run_value_iteration
 
 
 def run(
         src_dir: Path,
-        dst_dir: Path,
-        k_folds: int,
-        val_frac: float,
-        random_state: int,
+        dst_dir: Path
 ):
     """
     Train and score a majority predictor across six datasets.
     :param src_dir: Input directory that provides each dataset and params files
     :param dst_dir: Output directory
-    :param k_folds: Number of folds to partition the data into
-    :param val_frac: Validation fraction of train-validation set
-    :param random_state: Random number seed
-
     """
     dir_path = Path(os.path.dirname(os.path.realpath(__file__)))
     log_path = dir_path / "p5.log"
@@ -46,13 +38,8 @@ def run(
     log_format = "%(asctime)s - %(levelname)s - %(message)s"
     logging.basicConfig(filename=log_path, level=logging.DEBUG, format=log_format)
 
-    logging.debug(f"Begin: src_dir={src_dir.name}, dst_dir={dst_dir.name}, seed={random_state}.")
+    logging.debug(f"Begin: src_dir={src_dir.name}, dst_dir={dst_dir.name}.")
 
-    # Load data catalog and tuning params
-    with open(src_dir / "data_catalog.json", "r") as file:
-        data_catalog = json.load(file)
-    with open(src_dir / "tuning_params.json", "r") as file:
-        tuning_params = json.load(file)
 
     # Initialize tuning results and output lists
     # tuning_results = []

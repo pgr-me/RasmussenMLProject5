@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Peter Rasmussen, Programming Assignment 5, test_value_iteration.py
+"""Peter Rasmussen, Programming Assignment 5, run_value_iteration.py
 
 """
 # Standard library imports
@@ -18,7 +18,7 @@ from p5.track import Track
 warnings.filterwarnings('ignore')
 
 # Define constants
-TEST_DIR = Path(".").absolute()
+TEST_DIR = Path("").absolute()
 REPO_DIR = TEST_DIR.parent
 P4_DIR = REPO_DIR / "p5"
 DATA_DIR = REPO_DIR / "data"
@@ -32,7 +32,7 @@ track_srcs = [x for x in IN_DIR.iterdir() if x.stem == "toy-track"]
 OOB_PENALTIES = ["stay-in-place", "back-to-beginning"]
 
 
-def test_value_iteration():
+def run_value_iteration():
     """
     Test value iteration algorithm.
     """
@@ -89,4 +89,4 @@ def test_value_iteration():
 
 
 if __name__ == "__main__":
-    test_value_iteration()
+    run_value_iteration()

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Peter Rasmussen, Programming Assignment 5, test_sarsa.py
+"""Peter Rasmussen, Programming Assignment 5, run_sarsa.py
 Test SARSA algorithm.
 """
 # Standard library imports
@@ -19,7 +19,7 @@ from p5.utils import compute_velocity, realize_action
 warnings.filterwarnings('ignore')
 
 # Define constants
-TEST_DIR = Path(".").absolute()
+TEST_DIR = Path("").absolute()
 REPO_DIR = TEST_DIR.parent
 P4_DIR = REPO_DIR / "p5"
 DATA_DIR = REPO_DIR / "data"
@@ -35,7 +35,7 @@ OOB_PENALTIES = ["stay-in-place", "back-to-beginning"]
 policy = softmax_policy
 
 
-def test_sarsa():
+def run_sarsa():
     """
     Test value iteration algorithm.
     """
@@ -168,4 +168,4 @@ def test_sarsa():
 
 
 if __name__ == "__main__":
-    test_sarsa()
+    run_sarsa()
