@@ -33,7 +33,7 @@ def run_q_learning(src_dir: Path, dst_dir: Path, policy: t.Callable = softmax_po
 
             # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             # Make the track and possible states
-            track = Track(track_src)
+            track = Track(track_src, oob_penalty=oob_penalty)
             track.prep_track()
             track.make_states(velocities=VELOCITIES)
             track.make_state_actions(velocities=VELOCITIES)

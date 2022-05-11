@@ -44,7 +44,7 @@ def test_value_iteration():
 
             # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             # Make the track and possible states
-            track = Track(track_src)
+            track = Track(track_src, oob_penalty=oob_penalty)
             track.prep_track()
             track.make_states(velocities=VELOCITIES)
             states = track.states.copy()

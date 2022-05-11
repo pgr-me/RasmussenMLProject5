@@ -52,7 +52,7 @@ def test_sarsa():
 
             # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             # Make the track and possible states
-            track = Track(track_src)
+            track = Track(track_src, oob_penalty=oob_penalty)
             track.prep_track()
             track.make_states(velocities=VELOCITIES)
             track.make_state_actions(velocities=VELOCITIES)
